@@ -6,9 +6,11 @@ import { getPrisma } from "../src/prisma.js";
 // Hint: prisma.category.upsert({ where:{name}, update:{}, create:{name} }).
 async function main() {
   const prisma = getPrisma();
-  void prisma;
-  // TODO(Issue 3): upsert each category so the seed is idempotent.
-  console.log("TODO: implement the category seed.");
+
+  await prisma.category.upsert({ where: {name: "Account and Access"}, update: {}, create: {name: "Account and Access"} })
+  await prisma.category.upsert({ where: {name: "Hardware"}, update: {}, create: {name: "Hardware" } })
+  await prisma.category.upsert({ where: {name: "Software"}, update: {}, create: {name: "Software" } })
+  await prisma.category.upsert({ where: {name: "Network"}, update: {}, create: {name: "Network" } })
 }
 
 main()
