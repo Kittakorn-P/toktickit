@@ -37,15 +37,15 @@ export default function App() {
 
       {state === "success" && (
       <> 
-        <p>ONLINE</p> <ul>
+        <p>System Status: Online</p> <ol>
           {categories.map((cat) => (
           <li key={cat.id}>{cat.name}</li>))}
-        </ul> 
+        </ol> 
       </>
       )
       }
       
-      {state === "error" && <p>OFFLINE: {errorMsg} </p>}
+      {state === "error" && <p>System Status: Offline <br /> {errorMsg} </p>}
     </div>
   );
 }
