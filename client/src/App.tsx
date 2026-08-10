@@ -7,6 +7,7 @@ type UiState = "idle" | "loading" | "success" | "error";
 export default function App() {
   const [state, setState] = useState<UiState>("idle");
   const [categories, setCategories] = useState<Category[]>([]);
+  const [errorMsg, setErrorMsg] = useState("");
   void categories;
 
   async function handleCheck() {
@@ -14,6 +15,14 @@ export default function App() {
     //   - success: store categories and show Online + the list, or
     //   - error: show Offline + a useful message.
     setState("loading");
+    try {
+      const res = await checkSystem()
+      setState("success");
+      setCategories(res.categories)
+    } catch (error) {
+      setState("error");
+      setErrorMsg("Unable to connect to TokTickIT API")
+    }
   }
 
   return (
@@ -26,7 +35,8 @@ export default function App() {
         {state === "loading" ? "Loading…" : "Check System"}
       </button>
 
-      {/* TODO(Issue 4): render loading / success (Online + categories) / error (Offline) states. */}
+      {state === "success" && <p>ONLINE</p>}
+      {state === "error" && <p>OFFLINE: {errorMsg} </p>}
     </div>
   );
 }
