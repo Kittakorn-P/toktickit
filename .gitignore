@@ -5,6 +5,7 @@ node_modules/
 *.env
 !.env.example
 # build output
+.vite/
 dist/
 build/
 # prisma
