@@ -35,8 +35,17 @@ export default function App() {
         {state === "loading" ? "Loading…" : "Check System"}
       </button>
 
-      {state === "success" && <p>ONLINE</p>}
-      {state === "error" && <p>OFFLINE: {errorMsg} </p>}
+      {state === "success" && (
+      <> 
+        <p>System Status: Online</p> <ol>
+          {categories.map((cat) => (
+          <li key={cat.id}>{cat.name}</li>))}
+        </ol> 
+      </>
+      )
+      }
+      
+      {state === "error" && <p>System Status: Offline <br /> {errorMsg} </p>}
     </div>
   );
 }
