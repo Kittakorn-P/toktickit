@@ -4,6 +4,7 @@ import { getPrisma } from "./prisma.js";
 import { categoriesRouter } from "./routes/categories.js";
 import { relatedSystemsRouter } from "./routes/relatedSystems.js";
 import { requestersRouter } from "./routes/requesters.js";
+import { ticketsRouter } from "./routes/tickets.js";
 void getPrisma;
 
 export const app = express();
@@ -24,5 +25,6 @@ app.get("/api/health", (_req: Request, res: Response) => {
 app.use("/api/categories", categoriesRouter);
 app.use("/api/related-systems", relatedSystemsRouter);
 app.use("/api/requesters", requestersRouter);
+app.use("/api/tickets", ticketsRouter);
 
 export default app;
