@@ -75,23 +75,82 @@ ticketsRouter.post("/", async (req, res: Response) => {
 
     res.status(201).json(ticket);
   } catch (error) {
+    console.error("POST /api/tickets failed:", error);
     res.status(500).json({ error: "Unable to create ticket. Please try again." });
   }
 });
 
 // ---------------------------------------------------------------------------
-// Issue 18 (My Tickets) will extend this with search/filter/sort/pagination.
-// Minimal owned-list version for now so the route exists and is testable.
+// Issue 18 — GET /api/tickets
+// Search, filter, sort, and paginate the current Requester's own Tickets.
+// Invalid/out-of-range params fall back to defaults rather than erroring
+// (BR-10). Ownership filtering is always server-side (BR-08).
 // ---------------------------------------------------------------------------
+const SORT_FIELDS: Record<string, string> = {
+  createdAt: "createdAt",
+  "-createdAt": "createdAt",
+  updatedAt: "updatedAt",
+  "-updatedAt": "updatedAt",
+  ticketNumber: "ticketNumber",
+  "-ticketNumber": "ticketNumber",
+};
+
 ticketsRouter.get("/", async (req, res: Response) => {
   try {
     const prisma = getPrisma();
-    const tickets = await prisma.ticket.findMany({
-      where: { requesterId: req.requester!.id },
-      orderBy: { createdAt: "desc" },
+
+    const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
+    const categoryFilter = Number(req.query.category);
+    const priorityFilter = typeof req.query.requestedPriority === "string"
+      ? req.query.requestedPriority
+      : undefined;
+    const statusFilter = typeof req.query.status === "string" ? req.query.status : undefined;
+
+    const sortParam = typeof req.query.sort === "string" ? req.query.sort : "-createdAt";
+    const sortField = SORT_FIELDS[sortParam] ?? "createdAt";
+    const sortDirection = sortParam.startsWith("-") ? "desc" : "asc";
+
+    let page = Number(req.query.page);
+    if (!Number.isInteger(page) || page < 1) page = 1;
+
+    let pageSize = Number(req.query.pageSize);
+    if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 50) pageSize = 10;
+
+    const where = {
+      requesterId: req.requester!.id,
+      ...(search && {
+        OR: [
+          { ticketNumber: { contains: search, mode: "insensitive" as const } },
+          { summary: { contains: search, mode: "insensitive" as const } },
+        ],
+      }),
+      ...(Number.isInteger(categoryFilter) && { categoryId: categoryFilter }),
+      ...(priorityFilter && { requestedPriority: priorityFilter as never }),
+      ...(statusFilter && { currentStatus: statusFilter as never }),
+    };
+
+    const [tickets, totalItems] = await Promise.all([
+      prisma.ticket.findMany({
+        where,
+        orderBy: { [sortField]: sortDirection },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: { category: true, relatedSystem: true },
+      }),
+      prisma.ticket.count({ where }),
+    ]);
+
+    res.status(200).json({
+      tickets,
+      pagination: {
+        page,
+        pageSize,
+        totalItems,
+        totalPages: Math.max(1, Math.ceil(totalItems / pageSize)),
+      },
     });
-    res.status(200).json({ tickets });
   } catch (error) {
+    console.error("GET /api/tickets failed:", error);
     res.status(500).json({ error: "Unable to load tickets." });
   }
 });
@@ -112,6 +171,7 @@ ticketsRouter.get("/:id", async (req, res: Response) => {
     }
     res.status(200).json(ticket);
   } catch (error) {
+    console.error("GET /api/tickets/:id failed:", error);
     res.status(500).json({ error: "Unable to load ticket." });
   }
 });

@@ -5,6 +5,7 @@ import { categoriesRouter } from "./routes/categories.js";
 import { relatedSystemsRouter } from "./routes/relatedSystems.js";
 import { requestersRouter } from "./routes/requesters.js";
 import { ticketsRouter } from "./routes/tickets.js";
+import { attachmentsRouter } from "./routes/attachments.js";
 void getPrisma;
 
 export const app = express();
@@ -26,5 +27,6 @@ app.use("/api/categories", categoriesRouter);
 app.use("/api/related-systems", relatedSystemsRouter);
 app.use("/api/requesters", requestersRouter);
 app.use("/api/tickets", ticketsRouter);
+app.use("/api", attachmentsRouter);
 
 export default app;
