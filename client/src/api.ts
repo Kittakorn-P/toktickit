@@ -121,3 +121,142 @@ export async function createTicket(
   }
   return res.json();
 }
+
+// ---------------------------------------------------------------------------
+// Lab 2 — Issue 18: My Tickets
+// ---------------------------------------------------------------------------
+export interface TicketListItem {
+  id: number;
+  ticketNumber: string;
+  summary: string;
+  category: { id: number; name: string };
+  relatedSystem: { id: number; name: string };
+  requestedPriority: string;
+  currentStatus: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PaginationMeta {
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+}
+
+export interface TicketListParams {
+  search?: string;
+  category?: number;
+  requestedPriority?: string;
+  status?: string;
+  sort?: string;
+  page?: number;
+}
+
+export async function getTickets(
+  requesterId: number,
+  params: TicketListParams = {}
+): Promise<{ tickets: TicketListItem[]; pagination: PaginationMeta }> {
+  const query = new URLSearchParams();
+  if (params.search) query.set("search", params.search);
+  if (params.category) query.set("category", String(params.category));
+  if (params.requestedPriority) query.set("requestedPriority", params.requestedPriority);
+  if (params.status) query.set("status", params.status);
+  if (params.sort) query.set("sort", params.sort);
+  if (params.page) query.set("page", String(params.page));
+
+  const res = await fetch(`${API_URL}/api/tickets?${query.toString()}`, {
+    headers: requesterHeaders(requesterId),
+  });
+  if (!res.ok) throw new Error("Unable to load tickets.");
+  return res.json();
+}
+
+// ---------------------------------------------------------------------------
+// Lab 2 — Issue 19: Ticket Detail + Attachments
+// ---------------------------------------------------------------------------
+export interface TicketDetail extends Ticket {
+  category: { id: number; name: string };
+  relatedSystem: { id: number; name: string };
+}
+
+export interface AttachmentMeta {
+  id: number;
+  originalFilename: string;
+  mimeType: string;
+  sizeBytes: number;
+  isRemoved: boolean;
+  removedAt: string | null;
+  createdAt: string;
+}
+
+export async function getTicketDetail(
+  requesterId: number,
+  ticketId: number
+): Promise<TicketDetail | null> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}`, {
+    headers: requesterHeaders(requesterId),
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error("Unable to load ticket.");
+  return res.json();
+}
+
+export async function getAttachments(
+  requesterId: number,
+  ticketId: number
+): Promise<AttachmentMeta[]> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/attachments`, {
+    headers: requesterHeaders(requesterId),
+  });
+  if (!res.ok) throw new Error("Unable to load attachments.");
+  const body = await res.json();
+  return body.attachments;
+}
+
+export async function uploadAttachment(
+  requesterId: number,
+  ticketId: number,
+  file: File
+): Promise<AttachmentMeta> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/attachments`, {
+    method: "POST",
+    headers: requesterHeaders(requesterId), // no Content-Type: browser sets multipart boundary
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "Upload failed.");
+  }
+  return res.json();
+}
+
+export async function removeAttachment(requesterId: number, attachmentId: number): Promise<void> {
+  const res = await fetch(`${API_URL}/api/attachments/${attachmentId}/remove`, {
+    method: "PATCH",
+    headers: requesterHeaders(requesterId),
+  });
+  if (!res.ok) throw new Error("Unable to remove attachment.");
+}
+
+export async function downloadAttachment(
+  requesterId: number,
+  attachmentId: number,
+  filename: string
+): Promise<void> {
+  const res = await fetch(`${API_URL}/api/attachments/${attachmentId}/download`, {
+    headers: requesterHeaders(requesterId),
+  });
+  if (!res.ok) throw new Error("Unable to download attachment.");
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
