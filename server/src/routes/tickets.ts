@@ -165,6 +165,7 @@ ticketsRouter.get("/:id", async (req, res: Response) => {
     const prisma = getPrisma();
     const ticket = await prisma.ticket.findUnique({
       where: { id: Number(req.params.id) },
+      include: { category: true, relatedSystem: true },
     });
     if (!ticket || ticket.requesterId !== req.requester!.id) {
       return res.status(404).json({ error: "Ticket not found." });

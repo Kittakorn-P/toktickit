@@ -4,6 +4,7 @@ import RequesterSelection from "./pages/RequesterSelection.js";
 import RequireRequester from "./pages/RequireRequester.js";
 import MyTickets from "./pages/MyTickets.js";
 import CreateTicket from "./pages/CreateTicket.js";
+import TicketDetail from "./pages/TicketDetail.js";
 import HealthCheck from "./pages/HealthCheck.js";
 
 export default function App() {
@@ -15,6 +16,7 @@ export default function App() {
           <Route path="/health" element={<HealthCheck />} />
           <Route element={<RequireRequester />}>
             <Route path="/tickets" element={<MyTickets />} />
+            <Route path="/tickets/:id" element={<TicketDetail />} />
             <Route path="/create-ticket" element={<CreateTicket />} />
           </Route>
         </Routes>
