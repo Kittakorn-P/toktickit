@@ -42,6 +42,11 @@ Every AC must map to at least one automated test with a real file path.
 | E2E-01 | E2E | AC-01, AC-11 | Full flow: select Requester → create Ticket → find it in My Tickets | Ticket appears with correct Ticket Number after creation | `e2e/lab-02/requester-ticket-flow.spec.ts` | Pending |
 | E2E-02 | E2E | AC-03 | Requester B attempts to directly navigate to Requester A's Ticket Detail URL | Not-found / access-denied UI shown; no Ticket data rendered | `e2e/lab-02/requester-ticket-flow.spec.ts` | Pending |
 | E2E-03 | E2E | AC-10 | Upload an attachment, then soft-remove it, then attempt download | Removed Attachment cannot be downloaded via UI | `e2e/lab-02/requester-ticket-flow.spec.ts` | Pending |
+| Test ID | Type | Requirement / AC | What It Tests | Expected Result | Automated Test File | Final |
+|---|---|---|---|---|---|---|
+| UI-10 | UI | AC-02 | RequireRequester guard with no Requester selected | Redirects to Requester Selection screen; protected content never renders | `client/tests/lab-02/RequireRequester.test.tsx` | Pass |
+| API-15 | API | BR-06 | Requester deactivated mid-session, same session reused | Next request from that Requester returns 401 | `server/tests/lab-02/requester-deactivation.api.test.ts` | Pass |
+| API-16 | API | BR-14 | Attachment upload fails after Ticket already created | Ticket remains saved and retrievable; failure scoped to the attachment only | `server/tests/lab-02/attachments.api.test.ts` | Pass |
 
 ## 3. Acceptance-Criterion Traceability
 
@@ -59,6 +64,7 @@ Every AC must map to at least one automated test with a real file path.
 | AC-10 | API-10, API-11, UI-09, E2E-03 |
 | AC-11 | API-05, UI-07 |
 | AC-12 | RESP-01, RESP-02 |
+| AC-02 | UI-10 |
 
 ## 4. Responsive and Visual Checklist
 
@@ -95,9 +101,5 @@ pass/fail counts and a summary here before submission.)*
 
 ## 7. Known Limitations or Deferred Tests
 
-- AC-02 (redirect to Selector when no Requester chosen) needs an explicit UI test —
-  add e.g. `UI-10` before calling this plan complete.
-- No dedicated test yet for BR-06 (Requester deactivated mid-session) — worth adding an
-  API or E2E case that deactivates a Requester between requests.
-- No dedicated test yet for BR-14 (Ticket created but attachment upload fails) — consider
-  an API test that mocks a storage failure after Ticket creation succeeds.
+None remaining — all previously identified gaps (AC-02, BR-06, BR-14) now have
+automated coverage as of the test-coverage pass (Issue #21).
