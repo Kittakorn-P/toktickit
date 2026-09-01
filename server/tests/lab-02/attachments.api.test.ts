@@ -132,4 +132,29 @@ describe("Attachment lifecycle", () => {
       .set("X-Requester-Id", String(otherRequesterId));
     expect(res.status).toBe(404);
   });
+
+  // BR-14: if attachment upload fails, the Ticket itself remains saved and
+  // retrievable — the failure is scoped to the attachment, not the Ticket.
+  it("keeps the Ticket intact and retrievable after a failed attachment upload", async () => {
+    const before = await request(app)
+      .get(`/api/tickets/${ticketId}`)
+      .set("X-Requester-Id", String(requesterId));
+    expect(before.status).toBe(200);
+
+    const failedUpload = await request(app)
+      .post(`/api/tickets/${ticketId}/attachments`)
+      .set("X-Requester-Id", String(requesterId))
+      .attach("file", Buffer.from("not allowed"), {
+        filename: "bad.txt",
+        contentType: "text/plain",
+      });
+    expect(failedUpload.status).toBe(400);
+
+    const after = await request(app)
+      .get(`/api/tickets/${ticketId}`)
+      .set("X-Requester-Id", String(requesterId));
+    expect(after.status).toBe(200);
+    expect(after.body.id).toBe(ticketId);
+    expect(after.body.summary).toBe(before.body.summary);
+  });
 });

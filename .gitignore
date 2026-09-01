@@ -15,3 +15,6 @@ server/prisma/*.db
 .DS_Store
 
 uploads/
+
+e2e/test-results/
+e2e/node_modules/
