@@ -13,3 +13,8 @@ server/prisma/*.db
 # logs & OS
 *.log
 .DS_Store
+
+uploads/
+
+e2e/test-results/
+e2e/node_modules/

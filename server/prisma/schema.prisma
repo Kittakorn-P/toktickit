@@ -10,17 +10,96 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ---------------------------------------------------------------------------
-// Issue 3 — Create and seed IT request categories
-// Define a Category model with:
-//   id        Int      @id @default(autoincrement())
-//   name      String   @unique
-//   createdAt DateTime @default(now())
-// Then run:  npx prisma migrate dev --name init
-// TODO(Issue 3): add the Category model below.
-// ---------------------------------------------------------------------------
 model Category {
   id        Int      @id @default(autoincrement())
   name      String   @unique
+  isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
+
+  tickets   Ticket[]
 }
+
+// ============================================================================
+// LAB 2 ADDITIONS — append everything below to your existing schema.prisma
+// (keep the existing Category model above, just add isActive to it — see note)
+// ============================================================================
+
+// NOTE: Category needs an `isActive` field added for GET /api/categories to
+// filter correctly per the spec. Add this line inside your existing Category
+// model:
+//   isActive  Boolean  @default(true)
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum TicketStatus {
+  NEW
+  // Lab 2 only ever produces NEW. Additional values (IN_PROGRESS, RESOLVED,
+  // etc.) are Lab 3+ scope — do not implement transitions to them yet.
+}
+
+model RequesterUser {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  tickets   Ticket[]
+}
+
+model RelatedSystem {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  tickets   Ticket[]
+}
+
+model Ticket {
+  id                Int           @id @default(autoincrement())
+  ticketNumber      String        @unique
+  requesterId       Int
+  requester         RequesterUser @relation(fields: [requesterId], references: [id])
+  categoryId        Int
+  category          Category      @relation(fields: [categoryId], references: [id])
+  relatedSystemId   Int
+  relatedSystem     RelatedSystem @relation(fields: [relatedSystemId], references: [id])
+  summary           String
+  description       String
+  requestedPriority Priority
+  currentStatus     TicketStatus  @default(NEW)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  attachments       Attachment[]
+
+  @@index([requesterId])
+  @@index([currentStatus])
+  @@index([createdAt])
+}
+
+model Attachment {
+  id               Int      @id @default(autoincrement())
+  ticketId         Int
+  ticket           Ticket   @relation(fields: [ticketId], references: [id])
+  originalFilename String
+  storedFilename   String
+  mimeType         String
+  sizeBytes        Int
+  isRemoved        Boolean  @default(false)
+  removedAt        DateTime?
+  createdAt        DateTime @default(now())
+
+  @@index([ticketId])
+}
+
+// ============================================================================
+// Also add this relation field inside your EXISTING Category model:
+//   tickets   Ticket[]
+// (Prisma requires the back-relation on both sides of a foreign key.)
+// ============================================================================
