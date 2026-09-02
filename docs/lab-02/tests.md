@@ -94,10 +94,41 @@ npx playwright test e2e/lab-02
 *(Confirm these match your actual package.json scripts before finalizing — adjust if your
 test runner commands differ.)*
 
-## 6. Final Results
+## Section 6. Final Results — paste this into docs/lab-02/tests.md
 
-*(Fill in once tests are implemented and run on the final `main` branch — paste actual
-pass/fail counts and a summary here before submission.)*
+Ran on final `lab2-staging` branch, [FILL IN today's date].
+
+**Backend (server/) — `npm run test`**
+```
+Test Files  9 passed (9)
+     Tests  28 passed (28)
+```
+Covers: Lab 1 regression (categories, health), Ticket creation/validation,
+ownership enforcement, My Tickets search/filter/sort/pagination, full
+Attachment lifecycle, Requester deactivation mid-session (BR-06), related
+systems, requesters, ticket number generation.
+
+**Frontend (client/) — `npm run test`**
+```
+Test Files  6 passed (6)
+     Tests  17 passed (17)
+```
+Covers: Lab 1 regression (health check UI), Create Ticket (validation/
+success/failure states), My Tickets (empty/no-results/populated states),
+Requester Selection (loading/empty/error/Continue flow), RequireRequester
+guard (AC-02), Ticket Detail (owned ticket display, not-found state,
+attachment removal).
+
+**E2E and Responsive/Visual QA (e2e/) — `npx playwright test`**
+```
+13 passed (20.5s)
+```
+Covers: full create-to-list flow (E2E-01), cross-Requester ownership block
+via client-side navigation (E2E-02), attachment upload/remove/blocked-
+download (E2E-03), 9 responsive screenshots across desktop/tablet/mobile
+for Create Ticket, My Tickets, and Ticket Detail, plus the initial smoke test.
+
+**Total: 58 tests passing, 0 failing, 0 skipped.**
 
 ## 7. Known Limitations or Deferred Tests
 
