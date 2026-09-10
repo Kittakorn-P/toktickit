@@ -19,10 +19,6 @@
 
 ## My Reflection
 
-*(This section is yours to personalize — the draft below is a starting point,
-not a final answer. Rewrite it in your own words based on what actually
-stood out to you.)*
-
 Working with an AI agent across this sprint was most useful for turning the
 handout's intentionally incomplete requirements into concrete, numbered
 Business Rules and Acceptance Criteria — having something to react to (agree,
