@@ -1,20 +1,15 @@
 import express, { Response } from "express";
 import { getPrisma } from "../prisma.js";
-import { requireRequester } from "../middleware/requireRequester.js";
+import { requireAuth, requireRole } from "../middleware/requireAuth.js";
 import { formatTicketNumber } from "../utils/ticketNumber.js";
 
 export const ticketsRouter = express.Router();
 
-// Every route in this router needs to know which Requester is asking.
-ticketsRouter.use(requireRequester);
+// Every route in this router needs an authenticated Requester.
+ticketsRouter.use(requireAuth, requireRole("REQUESTER"));
 
 const VALID_PRIORITIES = ["LOW", "MEDIUM", "HIGH"];
 
-// ---------------------------------------------------------------------------
-// Issue 16 — POST /api/tickets
-// Creates a Ticket owned by the current Requester. Validates required
-// fields and that Category/RelatedSystem references exist and are active.
-// ---------------------------------------------------------------------------
 ticketsRouter.post("/", async (req, res: Response) => {
   const { categoryId, relatedSystemId, summary, description, requestedPriority } = req.body;
   const errors: Record<string, string> = {};
@@ -58,12 +53,13 @@ ticketsRouter.post("/", async (req, res: Response) => {
     const ticket = await prisma.$transaction(async (tx) => {
       const created = await tx.ticket.create({
         data: {
-          requesterId: req.requester!.id,
+          requesterId: req.user!.id,
           categoryId: Number(categoryId),
           relatedSystemId: Number(relatedSystemId),
           summary: summary.trim(),
           description: description.trim(),
           requestedPriority,
+          itPriority: requestedPriority,
           ticketNumber: `PENDING-${Date.now()}-${Math.random()}`,
         },
       });
@@ -80,12 +76,6 @@ ticketsRouter.post("/", async (req, res: Response) => {
   }
 });
 
-// ---------------------------------------------------------------------------
-// Issue 18 — GET /api/tickets
-// Search, filter, sort, and paginate the current Requester's own Tickets.
-// Invalid/out-of-range params fall back to defaults rather than erroring
-// (BR-10). Ownership filtering is always server-side (BR-08).
-// ---------------------------------------------------------------------------
 const SORT_FIELDS: Record<string, string> = {
   createdAt: "createdAt",
   "-createdAt": "createdAt",
@@ -117,7 +107,7 @@ ticketsRouter.get("/", async (req, res: Response) => {
     if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 50) pageSize = 10;
 
     const where = {
-      requesterId: req.requester!.id,
+      requesterId: req.user!.id,
       ...(search && {
         OR: [
           { ticketNumber: { contains: search, mode: "insensitive" as const } },
@@ -155,11 +145,6 @@ ticketsRouter.get("/", async (req, res: Response) => {
   }
 });
 
-// ---------------------------------------------------------------------------
-// Issue 19 (Ticket Detail) will need this; included now since ownership
-// logic is identical to what we just built and tested here.
-// BR-07 / BR-19: not-owned and not-found are indistinguishable (404).
-// ---------------------------------------------------------------------------
 ticketsRouter.get("/:id", async (req, res: Response) => {
   try {
     const prisma = getPrisma();
@@ -167,7 +152,7 @@ ticketsRouter.get("/:id", async (req, res: Response) => {
       where: { id: Number(req.params.id) },
       include: { category: true, relatedSystem: true },
     });
-    if (!ticket || ticket.requesterId !== req.requester!.id) {
+    if (!ticket || ticket.requesterId !== req.user!.id) {
       return res.status(404).json({ error: "Ticket not found." });
     }
     res.status(200).json(ticket);
