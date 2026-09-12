@@ -2,12 +2,13 @@ import { describe, it, expect, beforeAll } from "vitest";
 import request from "supertest";
 import { app } from "../../src/app.js";
 import { getPrisma } from "../../src/prisma.js";
+import bcrypt from "bcrypt";
 
 let activeRequesterId: number;
 
 beforeAll(async () => {
   const prisma = getPrisma();
-  const requester = await prisma.requesterUser.findFirst({ where: { isActive: true } });
+  const requester = await prisma.user.findFirst({ where: { isActive: true, role: "REQUESTER" } });
   activeRequesterId = requester!.id;
 });
 
@@ -18,6 +19,46 @@ const validPayload = {
   description: "Battery drains fast even when idle.",
   requestedPriority: "MEDIUM",
 };
+
+describe("POST /api/tickets — rejects a session deactivated after login", () => {
+  it("returns 401 when the logged-in user is deactivated mid-session", async () => {
+    const prisma = getPrisma();
+
+    const testEmail = `temp-session-${Date.now()}@example.com`;
+    const testPassword = "TestPass123!";
+    const passwordHash = await bcrypt.hash(testPassword, 10);
+
+    const testUser = await prisma.user.create({
+      data: {
+        name: "Temp Session Test",
+        email: testEmail,
+        isActive: true,
+        role: "REQUESTER",
+        passwordHash,
+        mustChangePassword: false,
+      },
+    });
+
+    const loginRes = await request(app)
+      .post("/api/auth/login")
+      .send({ email: testEmail, password: testPassword });
+    const sessionCookie = loginRes.headers["set-cookie"];
+
+    await prisma.user.update({
+      where: { id: testUser.id },
+      data: { isActive: false },
+    });
+
+    const res = await request(app)
+      .post("/api/tickets")
+      .set("Cookie", sessionCookie)
+      .send(validPayload);
+
+    expect(res.status).toBe(401);
+
+    await prisma.user.delete({ where: { id: testUser.id } });
+  });
+});
 
 describe("POST /api/tickets", () => {
   it("creates a ticket and returns 201 with a generated ticketNumber", async () => {
@@ -59,7 +100,7 @@ describe("POST /api/tickets", () => {
 
   it("returns 401 when X-Requester-Id refers to an inactive requester", async () => {
     const prisma = getPrisma();
-    const inactive = await prisma.requesterUser.findFirst({ where: { isActive: false } });
+    const inactive = await prisma.user.findFirst({ where: { isActive: false, role: "REQUESTER" } });
     const res = await request(app)
       .post("/api/tickets")
       .set("X-Requester-Id", String(inactive!.id))
@@ -71,7 +112,7 @@ describe("POST /api/tickets", () => {
 describe("GET /api/tickets/:id — ownership (BR-07, BR-19)", () => {
   it("returns 404 for a ticket belonging to a different requester", async () => {
     const prisma = getPrisma();
-    const otherRequester = await prisma.requesterUser.findFirst({
+    const otherRequester = await prisma.user.findFirst({
       where: { isActive: true, id: { not: activeRequesterId } },
     });
 

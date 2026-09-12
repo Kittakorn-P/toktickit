@@ -34,7 +34,7 @@ export async function requireRequester(
 
   try {
     const prisma = getPrisma();
-    const requester = await prisma.requesterUser.findUnique({
+    const requester = await prisma.user.findUnique({
       where: { id: requesterId },
     });
 

@@ -9,7 +9,7 @@ let ticketId: number;
 
 beforeAll(async () => {
   const prisma = getPrisma();
-  const requesters = await prisma.requesterUser.findMany({ where: { isActive: true } });
+  const requesters = await prisma.user.findMany({ where: { isActive: true, role: "REQUESTER" } });
   requesterId = requesters[0].id;
   otherRequesterId = requesters[1].id;
 

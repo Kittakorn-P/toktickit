@@ -7,7 +7,7 @@ let requesterId: number;
 
 beforeAll(async () => {
   const prisma = getPrisma();
-  const requester = await prisma.requesterUser.findFirst({ where: { isActive: true } });
+  const requester = await prisma.user.findFirst({ where: { isActive: true, role: "REQUESTER" } });
   requesterId = requester!.id;
 
   // seed a few known tickets to search/filter/sort against
