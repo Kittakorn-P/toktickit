@@ -37,7 +37,7 @@ async function main() {
   for (const r of requesters) {
     await prisma.user.upsert({
       where: { email: r.email },
-      update: {},
+      update: { passwordHash, role: "REQUESTER", mustChangePassword: true },
       create: { ...r, role: "REQUESTER", passwordHash, mustChangePassword: true },
     });
   }
@@ -52,7 +52,7 @@ async function main() {
   for (const s of itStaff) {
     await prisma.user.upsert({
       where: { email: s.email },
-      update: {},
+      update: { passwordHash, role: "IT_STAFF", mustChangePassword: true },
       create: { ...s, role: "IT_STAFF", passwordHash, mustChangePassword: true },
     });
   }
