@@ -433,3 +433,85 @@ export async function postNote(ticketId: number, content: string): Promise<NoteI
   if (!res.ok) throw new Error("Unable to post note.");
   return res.json();
 }
+
+// ---------------------------------------------------------------------------
+// Lab 3 — Administrator User Management
+// ---------------------------------------------------------------------------
+export interface AdminUser {
+  id: number;
+  name: string;
+  email: string;
+  role: Role;
+  isActive: boolean;
+}
+
+export interface AdminUsersParams {
+  search?: string;
+  role?: Role;
+}
+
+export async function getAdminUsers(params: AdminUsersParams = {}): Promise<AdminUser[]> {
+  const query = new URLSearchParams();
+  if (params.search) query.set("search", params.search);
+  if (params.role) query.set("role", params.role);
+
+  const res = await authFetch(`/api/admin/users?${query.toString()}`);
+  if (!res.ok) throw new Error("Unable to load users.");
+  const body = await res.json();
+  return body.users;
+}
+
+export interface CreateUserInput {
+  name: string;
+  email: string;
+  role: Role;
+  isActive: boolean;
+  initialPassword: string;
+}
+
+export async function createAdminUser(input: CreateUserInput): Promise<AdminUser> {
+  const res = await authFetch("/api/admin/users", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  if (res.status === 400) {
+    const body = await res.json();
+    throw new ValidationError(body.errors ?? {});
+  }
+  if (res.status === 409) {
+    const body = await res.json();
+    throw new Error(body.error ?? "This email is already in use.");
+  }
+  if (!res.ok) throw new Error("Unable to create user.");
+  return res.json();
+}
+
+export interface UpdateUserInput {
+  name?: string;
+  email?: string;
+  role?: Role;
+  isActive?: boolean;
+}
+
+export async function updateAdminUser(id: number, input: UpdateUserInput): Promise<AdminUser> {
+  const res = await authFetch(`/api/admin/users/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "Unable to update user.");
+  }
+  return res.json();
+}
+
+export async function setAdminUserPassword(id: number, newInitialPassword: string): Promise<void> {
+  const res = await authFetch(`/api/admin/users/${id}/password`, {
+    method: "PATCH",
+    body: JSON.stringify({ newInitialPassword }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "Unable to set new password.");
+  }
+}

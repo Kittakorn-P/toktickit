@@ -24,6 +24,9 @@ export default function AppShell() {
           {(user?.role === "IT_STAFF" || user?.role === "ADMINISTRATOR") && (
             <Link to="/queue" className="text-white text-decoration-none">My Queue</Link>
           )}
+          {user?.role === "ADMINISTRATOR" && (
+            <Link to="/admin/users" className="text-white text-decoration-none">Users</Link>
+          )}
         </div>
         <div className="d-flex align-items-center gap-2">
           <span className="text-white small">{user?.name} · {user?.role}</span>
