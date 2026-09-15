@@ -8,12 +8,13 @@ import { requestersRouter } from "./routes/requesters.js";
 import { ticketsRouter } from "./routes/tickets.js";
 import { attachmentsRouter } from "./routes/attachments.js";
 import { authRouter } from "./routes/auth.js";
+import { commentsRouter } from "./routes/comments.js";
+import { notesRouter } from "./routes/notes.js";
+import { staffTicketsRouter } from "./routes/staffTickets.js";
 void getPrisma;
 
 export const app = express();
 
-// CHANGED: credentials + explicit origin required for session cookies to work.
-// The old cors() wildcard default is incompatible with credentialed requests.
 app.use(
   cors({
     origin: process.env.CLIENT_ORIGIN || "http://localhost:5173",
@@ -22,9 +23,6 @@ app.use(
 );
 app.use(express.json());
 
-// NEW — session setup. In-memory store, fine for local dev per our earlier
-// decision; add SESSION_SECRET to server/.env for anything beyond your own
-// machine.
 app.use(
   session({
     secret: process.env.SESSION_SECRET || "dev-only-insecure-secret-change-me",
@@ -47,6 +45,9 @@ app.use("/api/auth", authRouter);
 app.use("/api/categories", categoriesRouter);
 app.use("/api/related-systems", relatedSystemsRouter);
 app.use("/api/requesters", requestersRouter);
+app.use("/api/staff/tickets", staffTicketsRouter);
+app.use("/api/tickets", commentsRouter);
+app.use("/api/tickets", notesRouter);
 app.use("/api/tickets", ticketsRouter);
 app.use("/api", attachmentsRouter);
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import { getTickets, TicketListItem, PaginationMeta } from "../api.js";
+import { useNavigate } from "react-router-dom";
+import { getStaffQueue, StaffTicketListItem, PaginationMeta } from "../api.js";
 import { useAuth } from "../context/AuthContext.js";
 
 type LoadState = "loading" | "loaded" | "error";
@@ -11,41 +11,35 @@ const PRIORITY_BADGE: Record<string, string> = {
   HIGH: "bg-danger-subtle text-danger-emphasis",
 };
 
-export default function MyTickets() {
+export default function StaffQueue() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
-  const justCreated = (location.state as { justCreated?: string } | null)?.justCreated;
 
-  const [tickets, setTickets] = useState<TicketListItem[]>([]);
+  const [tickets, setTickets] = useState<StaffTicketListItem[]>([]);
   const [pagination, setPagination] = useState<PaginationMeta | null>(null);
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("");
-  const [priority, setPriority] = useState("");
+  const [itPriority, setItPriority] = useState("");
   const [status, setStatus] = useState("");
   const [sort, setSort] = useState("-createdAt");
   const [page, setPage] = useState(1);
 
   useEffect(() => {
     setLoadState("loading");
-    getTickets({
-      search: search || undefined,
-      category: category ? Number(category) : undefined,
-      requestedPriority: priority || undefined,
-      status: status || undefined,
-      sort,
-      page,
-    })
-      .then((res) => { setTickets(res.tickets); setPagination(res.pagination); setLoadState("loaded"); })
+    getStaffQueue({ search: search || undefined, itPriority: itPriority || undefined, status: status || undefined, sort, page })
+      .then((res) => {
+        setTickets(res.tickets);
+        setPagination(res.pagination);
+        setLoadState("loaded");
+      })
       .catch(() => setLoadState("error"));
-  }, [search, category, priority, status, sort, page]);
+  }, [search, itPriority, status, sort, page]);
 
   function clearFilters() {
-    setSearch(""); setCategory(""); setPriority(""); setStatus(""); setSort("-createdAt"); setPage(1);
+    setSearch(""); setItPriority(""); setStatus(""); setSort("-createdAt"); setPage(1);
   }
 
-  const hasActiveFilters = search || category || priority || status;
+  const hasActiveFilters = search || itPriority || status;
   const isTrulyEmpty = loadState === "loaded" && tickets.length === 0 && !hasActiveFilters;
   const isNoResults = loadState === "loaded" && tickets.length === 0 && !!hasActiveFilters;
 
@@ -53,13 +47,10 @@ export default function MyTickets() {
     <div className="container py-4">
       <div className="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
         <div>
-          <h1 className="h4 mb-1">My Tickets</h1>
+          <h1 className="h4 mb-1">My Queue</h1>
           <p className="text-muted small mb-0">Signed in as <strong>{user?.name}</strong></p>
         </div>
-        <Link to="/create-ticket" className="btn btn-success">+ Create Ticket</Link>
       </div>
-
-      {justCreated && <div className="alert alert-success">Ticket {justCreated} created successfully.</div>}
 
       <div className="row g-2 mb-3">
         <div className="col-md-4">
@@ -67,8 +58,8 @@ export default function MyTickets() {
             onChange={(e) => { setPage(1); setSearch(e.target.value); }} />
         </div>
         <div className="col-md-2">
-          <select className="form-select" value={priority} onChange={(e) => { setPage(1); setPriority(e.target.value); }}>
-            <option value="">All Priorities</option>
+          <select className="form-select" value={itPriority} onChange={(e) => { setPage(1); setItPriority(e.target.value); }}>
+            <option value="">All IT Priorities</option>
             <option value="LOW">Low</option><option value="MEDIUM">Medium</option><option value="HIGH">High</option>
           </select>
         </div>
@@ -83,7 +74,7 @@ export default function MyTickets() {
         <div className="col-md-2">
           <select className="form-select" value={sort} onChange={(e) => setSort(e.target.value)}>
             <option value="-createdAt">Newest first</option><option value="createdAt">Oldest first</option>
-            <option value="-updatedAt">Recently updated</option><option value="ticketNumber">Ticket No. (A-Z)</option>
+            <option value="-updatedAt">Recently updated</option><option value="itPriority">IT Priority</option>
           </select>
         </div>
         <div className="col-md-2">
@@ -91,30 +82,33 @@ export default function MyTickets() {
         </div>
       </div>
 
-      {loadState === "loading" && <p>Loading tickets…</p>}
-      {loadState === "error" && <div className="alert alert-danger">Unable to load tickets. Please try again.</div>}
-      {isTrulyEmpty && (
-        <div className="alert alert-info">You haven't created any tickets yet. <Link to="/create-ticket">Create your first ticket</Link>.</div>
-      )}
+      {loadState === "loading" && <p>Loading queue…</p>}
+      {loadState === "error" && <div className="alert alert-danger">Unable to load the queue. Please try again.</div>}
+      {isTrulyEmpty && <div className="alert alert-info">No tickets in the queue.</div>}
       {isNoResults && (
-        <div className="alert alert-warning">No tickets match your search/filters. <button className="btn btn-link p-0" onClick={clearFilters}>Clear Filters</button></div>
+        <div className="alert alert-warning">
+          No tickets match your search/filters. <button className="btn btn-link p-0" onClick={clearFilters}>Clear Filters</button>
+        </div>
       )}
 
       {loadState === "loaded" && tickets.length > 0 && (
         <>
           <table className="table d-none d-md-table">
             <thead>
-              <tr><th>Ticket No.</th><th>Summary</th><th>Category</th><th>Requested Priority</th><th>Current Status</th><th>Last Updated</th></tr>
+              <tr><th>Ticket No.</th><th>Created Date</th><th>Summary</th><th>Category</th>
+                <th>Requested Priority</th><th>IT Priority</th><th>Status</th><th>Owner</th></tr>
             </thead>
             <tbody>
               {tickets.map((t) => (
-                <tr key={t.id} style={{ cursor: "pointer" }} onClick={() => navigate(`/tickets/${t.id}`)}>
+                <tr key={t.id} style={{ cursor: "pointer" }} onClick={() => navigate(`/queue/${t.id}`)}>
                   <td>{t.ticketNumber}</td>
+                  <td>{new Date(t.createdAt).toLocaleDateString()}</td>
                   <td>{t.summary}</td>
                   <td>{t.category.name}</td>
                   <td><span className={`badge ${PRIORITY_BADGE[t.requestedPriority]}`}>{t.requestedPriority}</span></td>
+                  <td><span className={`badge ${PRIORITY_BADGE[t.itPriority]}`}>{t.itPriority}</span></td>
                   <td><span className="badge bg-secondary-subtle text-secondary-emphasis">{t.currentStatus.replace(/_/g, " ")}</span></td>
-                  <td>{new Date(t.updatedAt).toLocaleDateString()}</td>
+                  <td>{t.owner ? t.owner.name : <span className="text-muted">Unassigned</span>}</td>
                 </tr>
               ))}
             </tbody>
@@ -122,14 +116,18 @@ export default function MyTickets() {
 
           <div className="d-md-none">
             {tickets.map((t) => (
-              <div key={t.id} className="card mb-2" style={{ cursor: "pointer" }} onClick={() => navigate(`/tickets/${t.id}`)}>
+              <div key={t.id} className="card mb-2" style={{ cursor: "pointer" }} onClick={() => navigate(`/queue/${t.id}`)}>
                 <div className="card-body">
                   <div className="d-flex justify-content-between">
                     <strong>{t.ticketNumber}</strong>
                     <span className="badge bg-secondary-subtle text-secondary-emphasis">{t.currentStatus.replace(/_/g, " ")}</span>
                   </div>
                   <p className="mb-1">{t.summary}</p>
-                  <small className="text-muted">Updated {new Date(t.updatedAt).toLocaleDateString()}</small>
+                  <div className="d-flex gap-2">
+                    <span className={`badge ${PRIORITY_BADGE[t.requestedPriority]}`}>Req: {t.requestedPriority}</span>
+                    <span className={`badge ${PRIORITY_BADGE[t.itPriority]}`}>IT: {t.itPriority}</span>
+                  </div>
+                  <small className="text-muted">{t.owner ? t.owner.name : "Unassigned"}</small>
                 </div>
               </div>
             ))}
