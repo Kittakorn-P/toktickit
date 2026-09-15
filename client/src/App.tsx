@@ -11,6 +11,7 @@ import StaffQueue from "./pages/StaffQueue.js";
 import StaffTicketDetail from "./pages/StaffTicketDetail.js";
 import HealthCheck from "./pages/HealthCheck.js";
 import Home from "./pages/Home.js";
+import AdminUsers from "./pages/AdminUsers.js";
 
 export default function App() {
   return (
@@ -39,6 +40,12 @@ export default function App() {
             <Route element={<AppShell />}>
               <Route path="/queue" element={<StaffQueue />} />
               <Route path="/queue/:id" element={<StaffTicketDetail />} />
+            </Route>
+          </Route>
+
+          <Route element={<RequireAuth roles={["ADMINISTRATOR"]} />}>
+            <Route element={<AppShell />}>
+              <Route path="/admin/users" element={<AdminUsers />} />
             </Route>
           </Route>
         </Routes>
