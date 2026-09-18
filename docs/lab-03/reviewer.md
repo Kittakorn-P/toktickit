@@ -1,6 +1,6 @@
 # TokTickIT — Sprint 3 Reviewer Log (reviewer.md)
 
-**Reviewer:** Lathapol Srikhiao (@Lathapol)
+**Reviewer:** Lathapol Srikhiao (@Lathapol) && Grittapob Chutitas (@Ryugc)
 **Author:** Kittakorn P. (@Kittakorn-P)
 
 This log traces each Sprint 3 feature branch from PR open through review comments,
@@ -43,9 +43,9 @@ author responses, and final approval, in the order the branches were merged into
 
 ## PR 5 — Regression, QA & Release
 **Branch:** `feature/lab3-qa` → `lab3-staging`
-**PR link:** 
+**PR link:** https://github.com/Kittakorn-P/toktickit/pull/42
 **Files:** Session-auth rewrite of Lab 2 tests, new Lab 3 backend/frontend test suites, orphaned-test-user cleanup, `e2e/lab-03/` responsive screenshot automation, accessibility fixes (label/`htmlFor` pairing), `Home.tsx`/`AppShell.tsx` fixes found during QA
-**Comments from Lathapol:** 
+**Comments from Ryugc:** looks great, the ui matches the zen green requirement and the ui itself looks clean and readable.
 
 ---
 
