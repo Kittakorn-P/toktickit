@@ -1,26 +1,55 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { RequesterProvider } from "./context/RequesterContext.js";
-import RequesterSelection from "./pages/RequesterSelection.js";
-import RequireRequester from "./pages/RequireRequester.js";
+import { AuthProvider } from "./context/AuthContext.js";
+import RequireAuth from "./pages/RequireAuth.js";
+import AppShell from "./components/AppShell.js";
+import Login from "./pages/Login.js";
+import ChangePassword from "./pages/ChangePassword.js";
 import MyTickets from "./pages/MyTickets.js";
 import CreateTicket from "./pages/CreateTicket.js";
 import TicketDetail from "./pages/TicketDetail.js";
+import StaffQueue from "./pages/StaffQueue.js";
+import StaffTicketDetail from "./pages/StaffTicketDetail.js";
 import HealthCheck from "./pages/HealthCheck.js";
+import Home from "./pages/Home.js";
+import AdminUsers from "./pages/AdminUsers.js";
 
 export default function App() {
   return (
-    <RequesterProvider>
+    <AuthProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<RequesterSelection />} />
+          <Route path="/login" element={<Login />} />
           <Route path="/health" element={<HealthCheck />} />
-          <Route element={<RequireRequester />}>
-            <Route path="/tickets" element={<MyTickets />} />
-            <Route path="/tickets/:id" element={<TicketDetail />} />
-            <Route path="/create-ticket" element={<CreateTicket />} />
+
+          <Route element={<RequireAuth />}>
+            <Route path="/change-password" element={<ChangePassword />} />
+            <Route element={<AppShell />}>
+              <Route path="/" element={<Home />} />
+            </Route>
+          </Route>
+
+          <Route element={<RequireAuth roles={["REQUESTER"]} />}>
+            <Route element={<AppShell />}>
+              <Route path="/tickets" element={<MyTickets />} />
+              <Route path="/tickets/:id" element={<TicketDetail />} />
+              <Route path="/create-ticket" element={<CreateTicket />} />
+            </Route>
+          </Route>
+
+          <Route element={<RequireAuth roles={["IT_STAFF", "ADMINISTRATOR"]} />}>
+            <Route element={<AppShell />}>
+              <Route path="/queue" element={<StaffQueue />} />
+              <Route path="/queue/:id" element={<StaffTicketDetail />} />
+            </Route>
+          </Route>
+
+          <Route element={<RequireAuth roles={["ADMINISTRATOR"]} />}>
+            <Route element={<AppShell />}>
+              <Route path="/admin/users" element={<AdminUsers />} />
+            </Route>
           </Route>
         </Routes>
       </BrowserRouter>
-    </RequesterProvider>
+    </AuthProvider>
   );
 }

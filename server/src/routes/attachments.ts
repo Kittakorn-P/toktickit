@@ -4,10 +4,10 @@ import path from "path";
 import fs from "fs";
 import crypto from "crypto";
 import { getPrisma } from "../prisma.js";
-import { requireRequester } from "../middleware/requireRequester.js";
+import { requireAuth, requireRole } from "../middleware/requireAuth.js";
 
 export const attachmentsRouter = express.Router();
-attachmentsRouter.use(requireRequester);
+attachmentsRouter.use(requireAuth, requireRole("REQUESTER"));
 
 const UPLOAD_DIR = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(UPLOAD_DIR)) {
@@ -15,7 +15,7 @@ if (!fs.existsSync(UPLOAD_DIR)) {
 }
 
 const ALLOWED_MIME_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp", "application/pdf"];
-const MAX_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
+const MAX_SIZE_BYTES = 5 * 1024 * 1024;
 const MAX_ACTIVE_ATTACHMENTS = 5;
 
 const storage = multer.diskStorage({
@@ -38,10 +38,6 @@ const upload = multer({
   },
 });
 
-// ---------------------------------------------------------------------------
-// Issue 17 — POST /api/tickets/:id/attachments
-// BR-13: type/size/count limits. BR-07: only the owning Requester may attach.
-// ---------------------------------------------------------------------------
 attachmentsRouter.post(
   "/tickets/:ticketId/attachments",
   (req, res: Response, next) => {
@@ -64,7 +60,7 @@ attachmentsRouter.post(
       const ticketId = Number(req.params.ticketId);
 
       const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
-      if (!ticket || ticket.requesterId !== req.requester!.id) {
+      if (!ticket || ticket.requesterId !== req.user!.id) {
         return res.status(404).json({ error: "Ticket not found." });
       }
 
@@ -98,16 +94,13 @@ attachmentsRouter.post(
   }
 );
 
-// ---------------------------------------------------------------------------
-// GET /api/tickets/:id/attachments — metadata list, includes removed ones
-// ---------------------------------------------------------------------------
 attachmentsRouter.get("/tickets/:ticketId/attachments", async (req, res: Response) => {
   try {
     const prisma = getPrisma();
     const ticketId = Number(req.params.ticketId);
 
     const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
-    if (!ticket || ticket.requesterId !== req.requester!.id) {
+    if (!ticket || ticket.requesterId !== req.user!.id) {
       return res.status(404).json({ error: "Ticket not found." });
     }
 
@@ -122,10 +115,6 @@ attachmentsRouter.get("/tickets/:ticketId/attachments", async (req, res: Respons
   }
 });
 
-// ---------------------------------------------------------------------------
-// GET /api/attachments/:id/download
-// BR-16/BR-19: not-owned, not-found, and removed all return identical 404.
-// ---------------------------------------------------------------------------
 attachmentsRouter.get("/attachments/:id/download", async (req, res: Response) => {
   try {
     const prisma = getPrisma();
@@ -136,7 +125,7 @@ attachmentsRouter.get("/attachments/:id/download", async (req, res: Response) =>
 
     if (
       !attachment ||
-      attachment.ticket.requesterId !== req.requester!.id ||
+      attachment.ticket.requesterId !== req.user!.id ||
       attachment.isRemoved
     ) {
       return res.status(404).json({ error: "Attachment not found." });
@@ -150,9 +139,6 @@ attachmentsRouter.get("/attachments/:id/download", async (req, res: Response) =>
   }
 });
 
-// ---------------------------------------------------------------------------
-// PATCH /api/attachments/:id/remove — soft removal, confirm-only (no reason)
-// ---------------------------------------------------------------------------
 attachmentsRouter.patch("/attachments/:id/remove", async (req, res: Response) => {
   try {
     const prisma = getPrisma();
@@ -163,7 +149,7 @@ attachmentsRouter.patch("/attachments/:id/remove", async (req, res: Response) =>
 
     if (
       !attachment ||
-      attachment.ticket.requesterId !== req.requester!.id ||
+      attachment.ticket.requesterId !== req.user!.id ||
       attachment.isRemoved
     ) {
       return res.status(404).json({ error: "Attachment not found." });

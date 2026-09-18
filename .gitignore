@@ -17,4 +17,6 @@ server/prisma/*.db
 uploads/
 
 e2e/test-results/
-e2e/node_modules/
+e2e/node_modules/cookies.txt
+*cookies.txt
+test-results/
