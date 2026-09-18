@@ -86,6 +86,7 @@ export default function AdminUsers() {
           {loadState === "loaded" && users.length === 0 && <div className="alert alert-info">No users match your search/filters.</div>}
 
           {loadState === "loaded" && users.length > 0 && (
+            <div className="table-responsive">
             <table className="table">
               <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th></th></tr></thead>
               <tbody>
@@ -104,6 +105,7 @@ export default function AdminUsers() {
                 ))}
               </tbody>
             </table>
+            </div>
           )}
         </div>
 
@@ -205,26 +207,26 @@ function UserPanel({ mode, user, currentUserId, onSaved, onCancel }: UserPanelPr
       </div>
       <div className="card-body">
         <form onSubmit={handleSave}>
-          <div className="mb-3">
-            <label className="form-label">Full Name <span className="text-danger">*</span></label>
-            <input className={`form-control ${fieldErrors.name ? "is-invalid" : ""}`} value={name}
-              onChange={(e) => setName(e.target.value)} required />
-            {fieldErrors.name && <div className="invalid-feedback d-block">{fieldErrors.name}</div>}
-          </div>
-          <div className="mb-3">
-            <label className="form-label">Email Address <span className="text-danger">*</span></label>
-            <input type="email" className={`form-control ${fieldErrors.email ? "is-invalid" : ""}`} value={email}
-              onChange={(e) => setEmail(e.target.value)} required />
-            {fieldErrors.email && <div className="invalid-feedback d-block">{fieldErrors.email}</div>}
-          </div>
-          <div className="mb-3">
-            <label className="form-label">Role <span className="text-danger">*</span></label>
-            <select className="form-select" value={role} onChange={(e) => setRole(e.target.value as Role)}>
-              <option value="REQUESTER">Requester</option>
-              <option value="IT_STAFF">IT Staff</option>
-              <option value="ADMINISTRATOR">Administrator</option>
-            </select>
-          </div>
+        <div className="mb-3">
+          <label className="form-label" htmlFor="userName">Full Name <span className="text-danger">*</span></label>
+          <input id="userName" className={`form-control ${fieldErrors.name ? "is-invalid" : ""}`} value={name}
+          onChange={(e) => setName(e.target.value)} required />
+          {fieldErrors.name && <div className="invalid-feedback d-block">{fieldErrors.name}</div>}
+        </div>
+        <div className="mb-3">
+          <label className="form-label" htmlFor="userEmail">Email Address <span className="text-danger">*</span></label>
+          <input id="userEmail" type="email" className={`form-control ${fieldErrors.email ? "is-invalid" : ""}`} value={email}
+            onChange={(e) => setEmail(e.target.value)} required />
+          {fieldErrors.email && <div className="invalid-feedback d-block">{fieldErrors.email}</div>}
+        </div>
+        <div className="mb-3">
+          <label className="form-label" htmlFor="userRole">Role <span className="text-danger">*</span></label>
+          <select id="userRole" className="form-select" value={role} onChange={(e) => setRole(e.target.value as Role)}>
+            <option value="REQUESTER">Requester</option>
+            <option value="IT_STAFF">IT Staff</option>
+            <option value="ADMINISTRATOR">Administrator</option>
+          </select>
+        </div>
           <div className="mb-3 form-check form-switch">
             <input className="form-check-input" type="checkbox" checked={isActive} disabled={isSelf}
               onChange={(e) => setIsActive(e.target.checked)} id="activeToggle" />
@@ -234,12 +236,12 @@ function UserPanel({ mode, user, currentUserId, onSaved, onCancel }: UserPanelPr
 
           {mode === "create" && (
             <div className="mb-3">
-              <label className="form-label">Initial Password <span className="text-danger">*</span></label>
-              <input type="text" className={`form-control ${fieldErrors.initialPassword ? "is-invalid" : ""}`}
+              <label className="form-label" htmlFor="initialPassword">Initial Password <span className="text-danger">*</span></label>
+              <input id="initialPassword" type="text" className={`form-control ${fieldErrors.initialPassword ? "is-invalid" : ""}`}
                 value={initialPassword} onChange={(e) => setInitialPassword(e.target.value)} required />
               {fieldErrors.initialPassword && <div className="invalid-feedback d-block">{fieldErrors.initialPassword}</div>}
-              <div className="form-text">User must change this password at first login.</div>
-            </div>
+            <div className="form-text">User must change this password at first login.</div>
+          </div>
           )}
 
           {error && <div className="alert alert-danger py-2">{error}</div>}
