@@ -45,16 +45,16 @@ export default function ChangePassword() {
           <p className="text-muted small mb-4">You must change your password to continue.</p>
           <form onSubmit={handleSubmit}>
             <div className="mb-3">
-              <label className="form-label">Current (temporary) password</label>
-              <input type="password" className="form-control" value={current} onChange={(e) => setCurrent(e.target.value)} required />
+              <label className="form-label" htmlFor="currentPassword">Current (temporary) password</label>
+              <input id="currentPassword" type="password" className="form-control" value={current} onChange={(e) => setCurrent(e.target.value)} required />
             </div>
             <div className="mb-3">
-              <label className="form-label">New password</label>
-              <input type="password" className="form-control" value={next} onChange={(e) => setNext(e.target.value)} required />
+              <label className="form-label" htmlFor="newPassword">New password</label>
+              <input id="newPassword" type="password" className="form-control" value={next} onChange={(e) => setNext(e.target.value)} required />
             </div>
             <div className="mb-3">
-              <label className="form-label">Confirm new password</label>
-              <input type="password" className="form-control" value={confirm} onChange={(e) => setConfirm(e.target.value)} required />
+              <label className="form-label" htmlFor="confirmPassword">Confirm new password</label>
+              <input id="confirmPassword" type="password" className="form-control" value={confirm} onChange={(e) => setConfirm(e.target.value)} required />
             </div>
             <ul className="list-unstyled small mb-3">
               <li className={rules.length ? "text-success" : "text-muted"}>{rules.length ? "✓" : "○"} At least 8 characters</li>
