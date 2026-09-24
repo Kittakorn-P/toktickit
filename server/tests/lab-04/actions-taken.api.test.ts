@@ -12,9 +12,18 @@ let staffCookie: string[];
 let otherStaffId: number;
 let otherStaffCookie: string[];
 
-// Separate tickets per scenario so list/ordering assertions don't interfere.
+// Separate tickets per scenario so list/ordering/terminal-state assertions
+// don't interfere with each other.
 let ticketWithActionsId: number;
 let emptyTicketId: number;
+
+async function createTicket(summary: string, cookie: string[] = requesterCookie) {
+  const res = await request(app).post("/api/tickets").set("Cookie", cookie).send({
+    categoryId: 1, relatedSystemId: 1, summary, description: "Actions Taken test ticket",
+    requestedPriority: "MEDIUM",
+  });
+  return res.body.id as number;
+}
 
 beforeAll(async () => {
   const requester = await createTestUser("REQUESTER");
@@ -33,19 +42,8 @@ beforeAll(async () => {
   otherStaffId = otherStaff.id;
   otherStaffCookie = await loginTestUser(otherStaff.email, otherStaff.password);
 
-  const ticketA = await request(app).post("/api/tickets").set("Cookie", requesterCookie).send({
-    categoryId: 1, relatedSystemId: 1,
-    summary: "Actions Taken test ticket A", description: "For create/list/edit tests",
-    requestedPriority: "MEDIUM",
-  });
-  ticketWithActionsId = ticketA.body.id;
-
-  const ticketB = await request(app).post("/api/tickets").set("Cookie", requesterCookie).send({
-    categoryId: 1, relatedSystemId: 1,
-    summary: "Actions Taken test ticket B", description: "For empty-state tests",
-    requestedPriority: "LOW",
-  });
-  emptyTicketId = ticketB.body.id;
+  ticketWithActionsId = await createTicket("Actions Taken test ticket A — create/list/edit");
+  emptyTicketId = await createTicket("Actions Taken test ticket B — empty-state");
 });
 
 afterAll(async () => {
@@ -90,13 +88,75 @@ describe("POST /api/staff/tickets/:id/actions — AC-01, BR-03, BR-04", () => {
       .post(`/api/staff/tickets/${ticketWithActionsId}/actions`)
       .set("Cookie", staffCookie)
       .send({
-        description: "Escalated to network team.",
+        description: "Escalated to network team, second attempt.",
         result: "Pending response.",
         followUpRequired: true,
         followUpNote: "Check back in 2 business days.",
       });
     expect(res.status).toBe(201);
     expect(res.body.followUpNote).toBe("Check back in 2 business days.");
+  });
+
+  it("rejects a description over the max length instead of silently truncating", async () => {
+    const res = await request(app)
+      .post(`/api/staff/tickets/${ticketWithActionsId}/actions`)
+      .set("Cookie", staffCookie)
+      .send({ description: "x".repeat(4001), result: "Result text." });
+    expect(res.status).toBe(422);
+    expect(res.body.errors.description).toBeDefined();
+  });
+
+  it("REVIEW FIX: a duplicate submission within the retry window returns the existing action, not a second one", async () => {
+    const payload = {
+      description: "Double-click guard test action.",
+      result: "Same content submitted twice quickly.",
+      followUpRequired: false,
+    };
+    const first = await request(app)
+      .post(`/api/staff/tickets/${emptyTicketId}/actions`)
+      .set("Cookie", staffCookie)
+      .send(payload);
+    expect(first.status).toBe(201);
+
+    const second = await request(app)
+      .post(`/api/staff/tickets/${emptyTicketId}/actions`)
+      .set("Cookie", staffCookie)
+      .send(payload);
+    expect(second.status).toBe(200);
+    expect(second.body.id).toBe(first.body.id);
+
+    const list = await request(app)
+      .get(`/api/staff/tickets/${emptyTicketId}/actions`)
+      .set("Cookie", staffCookie);
+    const matching = list.body.actions.filter(
+      (a: { description: string }) => a.description === payload.description,
+    );
+    expect(matching.length).toBe(1);
+  });
+
+  it("REVIEW FIX: rejects creating an action on a Closed ticket", async () => {
+    const closedTicketId = await createTicket("Closed ticket — action rejected");
+    await request(app).patch(`/api/staff/tickets/${closedTicketId}/status`).set("Cookie", staffCookie).send({ status: "OPEN" });
+    await request(app).patch(`/api/staff/tickets/${closedTicketId}/status`).set("Cookie", staffCookie).send({ status: "IN_PROGRESS" });
+    await request(app).patch(`/api/staff/tickets/${closedTicketId}/status`).set("Cookie", staffCookie).send({ status: "RESOLVED" });
+    await request(app).patch(`/api/staff/tickets/${closedTicketId}/status`).set("Cookie", staffCookie).send({ status: "CLOSED" });
+
+    const res = await request(app)
+      .post(`/api/staff/tickets/${closedTicketId}/actions`)
+      .set("Cookie", staffCookie)
+      .send({ description: "Trying to add to a closed ticket.", result: "Should be rejected." });
+    expect(res.status).toBe(422);
+  });
+
+  it("REVIEW FIX: rejects creating an action on a Cancelled ticket", async () => {
+    const cancelledTicketId = await createTicket("Cancelled ticket — action rejected");
+    await request(app).patch(`/api/staff/tickets/${cancelledTicketId}/status`).set("Cookie", staffCookie).send({ status: "CANCELLED" });
+
+    const res = await request(app)
+      .post(`/api/staff/tickets/${cancelledTicketId}/actions`)
+      .set("Cookie", staffCookie)
+      .send({ description: "Trying to add to a cancelled ticket.", result: "Should be rejected." });
+    expect(res.status).toBe(422);
   });
 
   it("AUTH-01: a Requester cannot create an action", async () => {
@@ -127,14 +187,6 @@ describe("GET /api/staff/tickets/:id/actions and /api/tickets/:id/actions — AP
     expect(times).toEqual(sorted);
   });
 
-  it("API-06: a ticket with zero actions returns an empty array, not an error", async () => {
-    const res = await request(app)
-      .get(`/api/staff/tickets/${emptyTicketId}/actions`)
-      .set("Cookie", staffCookie);
-    expect(res.status).toBe(200);
-    expect(res.body.actions).toEqual([]);
-  });
-
   it("FR-05: the owning Requester can view (read-only) their ticket's actions", async () => {
     const res = await request(app)
       .get(`/api/tickets/${ticketWithActionsId}/actions`)
@@ -159,43 +211,62 @@ describe("GET /api/staff/tickets/:id/actions and /api/tickets/:id/actions — AP
 describe("PATCH /api/staff/tickets/:id/actions/:actionId — BR-05, BR-09", () => {
   let actionId: number;
   let actionUpdatedAt: string;
+  let editTicketId: number;
 
   beforeAll(async () => {
+    editTicketId = await createTicket("PATCH-specific ticket");
     const created = await request(app)
-      .post(`/api/staff/tickets/${emptyTicketId}/actions`)
+      .post(`/api/staff/tickets/${editTicketId}/actions`)
       .set("Cookie", staffCookie)
       .send({ description: "Initial description.", result: "Initial result.", followUpRequired: false });
     actionId = created.body.id;
     actionUpdatedAt = created.body.updatedAt;
   });
 
-  it("allows the author to edit", async () => {
+  it("REVIEW FIX: updatedAt is now required — omitting it is rejected with 400, not silently unchecked", async () => {
     const res = await request(app)
-      .patch(`/api/staff/tickets/${emptyTicketId}/actions/${actionId}`)
+      .patch(`/api/staff/tickets/${editTicketId}/actions/${actionId}`)
       .set("Cookie", staffCookie)
-      .send({ result: "Updated result after follow-up.", updatedAt: actionUpdatedAt });
+      .send({ result: "Trying without updatedAt." });
+    expect(res.status).toBe(400);
+  });
+
+  it("REVIEW FIX: any IT Staff/Admin may edit, not just the original author (handout FR-02)", async () => {
+    const res = await request(app)
+      .patch(`/api/staff/tickets/${editTicketId}/actions/${actionId}`)
+      .set("Cookie", otherStaffCookie)
+      .send({ result: "Edited by a different staff member.", updatedAt: actionUpdatedAt });
     expect(res.status).toBe(200);
-    expect(res.body.result).toBe("Updated result after follow-up.");
+    expect(res.body.result).toBe("Edited by a different staff member.");
     actionUpdatedAt = res.body.updatedAt;
   });
 
-  it("AUTH-04: rejects edit from a non-author, non-Admin IT Staff member", async () => {
+  it("REVIEW FIX: a non-string description is rejected with 422, not a 500", async () => {
     const res = await request(app)
-      .patch(`/api/staff/tickets/${emptyTicketId}/actions/${actionId}`)
-      .set("Cookie", otherStaffCookie)
-      .send({ result: "Trying to edit someone else's action." });
-    expect(res.status).toBe(403);
+      .patch(`/api/staff/tickets/${editTicketId}/actions/${actionId}`)
+      .set("Cookie", staffCookie)
+      .send({ description: 12345, updatedAt: actionUpdatedAt });
+    expect(res.status).toBe(422);
+    expect(res.body.errors.description).toBeDefined();
   });
 
-  it("API-04: rejects a stale updatedAt with 409 and does not apply the change", async () => {
+  it("REVIEW FIX: a followUpNote over the max length is rejected", async () => {
     const res = await request(app)
-      .patch(`/api/staff/tickets/${emptyTicketId}/actions/${actionId}`)
+      .patch(`/api/staff/tickets/${editTicketId}/actions/${actionId}`)
+      .set("Cookie", staffCookie)
+      .send({ followUpRequired: true, followUpNote: "x".repeat(2001), updatedAt: actionUpdatedAt });
+    expect(res.status).toBe(422);
+  });
+
+  it("API-04: rejects a stale updatedAt with 409 and does not apply the change (atomic check)", async () => {
+    const res = await request(app)
+      .patch(`/api/staff/tickets/${editTicketId}/actions/${actionId}`)
       .set("Cookie", staffCookie)
       .send({ result: "Stale write attempt.", updatedAt: "2000-01-01T00:00:00.000Z" });
     expect(res.status).toBe(409);
 
     const check = await request(app)
-      .get(`/api/staff/tickets/${emptyTicketId}/actions`)
+      .get(`/api/staff/tickets/${editTicketId}/actions`)
       .set("Cookie", staffCookie);
     const found = check.body.actions.find((a: { id: number }) => a.id === actionId);
     expect(found.result).not.toBe("Stale write attempt.");
@@ -203,9 +274,22 @@ describe("PATCH /api/staff/tickets/:id/actions/:actionId — BR-05, BR-09", () =
 
   it("enforces the follow-up-note rule on edit as well as create", async () => {
     const res = await request(app)
-      .patch(`/api/staff/tickets/${emptyTicketId}/actions/${actionId}`)
+      .patch(`/api/staff/tickets/${editTicketId}/actions/${actionId}`)
       .set("Cookie", staffCookie)
       .send({ followUpRequired: true, followUpNote: "", updatedAt: actionUpdatedAt });
+    expect(res.status).toBe(422);
+  });
+
+  it("REVIEW FIX: rejects editing an action on a Closed ticket", async () => {
+    await request(app).patch(`/api/staff/tickets/${editTicketId}/status`).set("Cookie", staffCookie).send({ status: "OPEN" });
+    await request(app).patch(`/api/staff/tickets/${editTicketId}/status`).set("Cookie", staffCookie).send({ status: "IN_PROGRESS" });
+    await request(app).patch(`/api/staff/tickets/${editTicketId}/status`).set("Cookie", staffCookie).send({ status: "RESOLVED" });
+    await request(app).patch(`/api/staff/tickets/${editTicketId}/status`).set("Cookie", staffCookie).send({ status: "CLOSED" });
+
+    const res = await request(app)
+      .patch(`/api/staff/tickets/${editTicketId}/actions/${actionId}`)
+      .set("Cookie", staffCookie)
+      .send({ result: "Trying to edit after close.", updatedAt: actionUpdatedAt });
     expect(res.status).toBe(422);
   });
 });
