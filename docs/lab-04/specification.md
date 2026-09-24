@@ -69,7 +69,8 @@ that regardless of what the client sends.
 | BR-02 | The Ticket Owner coordinates the Ticket, but any authorized IT Staff member may record an Action Taken on it — the actor need not be the Owner. |
 | BR-03 | `performedBy` on an Action Taken is always set from the authenticated session on the server; a client-supplied value is ignored. |
 | BR-04 | `followUpNote` is required and non-empty when `followUpRequired = true`; it is optional/nullable otherwise. Enforced server-side, not just in the form. |
-| BR-05 | Action Taken records are append-only for history purposes: `actionDateTime`, `performedBy`, and `ticketId` are immutable after create; `description`, `result`, `followUpRequired`, `followUpNote`, and `attachmentNotes` may be edited by their author (or any Admin), and edits are timestamped (`updatedAt`). |
+| BR-05 | Action Taken records are append-only for history purposes: `actionDateTime`, `performedBy`, and `ticketId` are immutable after create; `description`, `result`, `followUpRequired`, `followUpNote`, and `attachmentNotes` may be edited by any IT Staff or Administrator (not restricted to the original author — see §11, revised), and edits are timestamped (`updatedAt`). |
+| BR-11 | Actions Taken cannot be created or edited once a Ticket is Closed or Cancelled (terminal states). |
 | BR-06 | A Ticket may only move to **Resolved** from **In Progress** or **Waiting for Requester**, and only by IT Staff/Admin — never automatically from a Requester's "Looks Resolved" flag. |
 | BR-07 | A Requester's "Looks Resolved" indication is stored as an advisory flag on the Ticket and surfaces to IT Staff but never triggers a status change by itself. |
 | BR-08 | See §5.1 for the complete transition matrix; any transition not listed is rejected by the API with 409/422 regardless of UI state. |
@@ -207,9 +208,13 @@ Indexes: `(ticketId)`, `(performedById)` for dashboard/queue queries.
 
 1. **Actions Taken ordering** — displayed oldest-first (chronological work log reading
    order) rather than newest-first; confirmed against `ui-spec.md`.
-2. **Edit rights on Actions Taken** — restricted to the original author or an Admin
-   (not any IT Staff), since the handout implies auditability ("Performed by (auto)")
-   and unrestricted cross-editing would weaken that.
+2. **Edit rights on Actions Taken** — ~~restricted to the original author or an
+   Admin~~ **Revised during Issue 2 PR review.** The handout states plainly
+   that "IT Staff and Administrators can create and update Actions Taken"
+   (§4.3), with no author restriction — the original author-only assumption
+   was mine, not the handout's, and has been removed from both the code and
+   BR-05. `performedBy` still always reflects who originally recorded the
+   action (BR-03); only edit *rights* were widened, not the audit trail.
 3. **Optimistic concurrency** — implemented via `updatedAt` comparison rather than a
    separate version integer column, to avoid an extra migration column, consistent with
    how Lab 2/3 already tracks timestamps.

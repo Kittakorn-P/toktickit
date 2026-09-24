@@ -49,10 +49,11 @@ model User {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  ticketsRequested   Ticket[]  @relation("TicketRequester")
-  ticketsOwned       Ticket[]  @relation("TicketOwner")
+  ticketsRequested   Ticket[]      @relation("TicketRequester")
+  ticketsOwned       Ticket[]      @relation("TicketOwner")
   comments           Comment[]
   notes              Note[]
+  actionsTaken       ActionTaken[] // LAB 4
 }
 
 enum TicketStatus {
@@ -94,9 +95,13 @@ model Ticket {
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
+  // LAB 4 — advisory flag only (BR-07). Never changes currentStatus by itself.
+  looksResolvedByRequester Boolean @default(false)
+
   attachments       Attachment[]
   comments          Comment[]
   notes             Note[]
+  actionsTaken      ActionTaken[] // LAB 4
 
   @@index([requesterId])
   @@index([ownerId])
@@ -141,4 +146,32 @@ model Note {
   createdAt DateTime @default(now())
 
   @@index([ticketId])
+}
+
+// ============================================================================
+// LAB 4 ADDITIONS — Actions Taken. One Ticket has many ActionTaken rows
+// (BR-01). performedBy is always set server-side from the session, never
+// from the request body (BR-03). followUpNote is required when
+// followUpRequired is true (BR-04, enforced in the route handler; see
+// specification.md §7.1 — a DB-level CHECK constraint was considered but
+// skipped to keep the migration simple, since Prisma enforces it consistently
+// at the service layer already).
+// ============================================================================
+model ActionTaken {
+  id               Int      @id @default(autoincrement())
+  ticketId         Int
+  ticket           Ticket   @relation(fields: [ticketId], references: [id])
+  actionDateTime   DateTime @default(now())
+  description      String
+  result           String
+  performedById    Int
+  performedBy      User     @relation(fields: [performedById], references: [id])
+  followUpRequired Boolean  @default(false)
+  followUpNote     String?
+  attachmentNotes  String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([ticketId])
+  @@index([performedById])
 }

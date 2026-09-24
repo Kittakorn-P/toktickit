@@ -2,6 +2,7 @@ import express, { Response } from "express";
 import { getPrisma } from "../prisma.js";
 import { requireAuth, requireRole } from "../middleware/requireAuth.js";
 import { formatTicketNumber } from "../utils/ticketNumber.js";
+import { canTransition } from "../utils/ticketTransitions.js";
 
 export const ticketsRouter = express.Router();
 
@@ -159,5 +160,99 @@ ticketsRouter.get("/:id", async (req, res: Response) => {
   } catch (error) {
     console.error("GET /api/tickets/:id failed:", error);
     res.status(500).json({ error: "Unable to load ticket." });
+  }
+});
+
+// ============================================================================
+// LAB 4 ADDITIONS
+// ============================================================================
+
+// ---------------------------------------------------------------------------
+// GET /api/tickets/:id/actions — read-only Actions Taken for the Requester's
+// own ticket (FR-05). Same 404-for-ownership pattern as GET /:id, so a
+// Requester probing another user's ticket ID can't tell it exists.
+// ---------------------------------------------------------------------------
+ticketsRouter.get("/:id/actions", async (req, res: Response) => {
+  try {
+    const prisma = getPrisma();
+    const ticket = await prisma.ticket.findUnique({ where: { id: Number(req.params.id) } });
+    if (!ticket || ticket.requesterId !== req.user!.id) {
+      return res.status(404).json({ error: "Ticket not found." });
+    }
+    const actions = await prisma.actionTaken.findMany({
+      where: { ticketId: ticket.id },
+      orderBy: { actionDateTime: "asc" },
+      include: { performedBy: { select: { id: true, name: true } } },
+    });
+    res.status(200).json({ actions });
+  } catch (error) {
+    console.error("GET /api/tickets/:id/actions failed:", error);
+    res.status(500).json({ error: "Unable to load actions taken." });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// PATCH /api/tickets/:id/status — a Requester may only ever move a ticket
+// Resolved -> Reopened (BR-06/BR-08). Every other transition is staff-only
+// via /api/staff/tickets/:id/status.
+// ---------------------------------------------------------------------------
+ticketsRouter.patch("/:id/status", async (req, res: Response) => {
+  const { status, updatedAt } = req.body;
+  if (status !== "REOPENED") {
+    return res.status(403).json({ error: "You don't have access to this transition." });
+  }
+  try {
+    const prisma = getPrisma();
+    const ticket = await prisma.ticket.findUnique({ where: { id: Number(req.params.id) } });
+    if (!ticket || ticket.requesterId !== req.user!.id) {
+      return res.status(404).json({ error: "Ticket not found." });
+    }
+    if (!canTransition(ticket.currentStatus, "REOPENED", "REQUESTER")) {
+      return res.status(422).json({ error: `Cannot move from ${ticket.currentStatus} to REOPENED.` });
+    }
+    if (updatedAt && new Date(updatedAt).getTime() !== ticket.updatedAt.getTime()) {
+      return res.status(409).json({ error: "This ticket was updated elsewhere.", current: ticket });
+    }
+    const updated = await prisma.ticket.update({
+      where: { id: ticket.id },
+      data: { currentStatus: "REOPENED" },
+    });
+    res.status(200).json({
+      id: updated.id,
+      currentStatus: updated.currentStatus,
+      updatedAt: updated.updatedAt,
+    });
+  } catch (error) {
+    console.error("PATCH /api/tickets/:id/status failed:", error);
+    res.status(500).json({ error: "Unable to update status." });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// PATCH /api/tickets/:id/looks-resolved — advisory flag only (BR-07/FR-07).
+// Never changes currentStatus by itself.
+// ---------------------------------------------------------------------------
+ticketsRouter.patch("/:id/looks-resolved", async (req, res: Response) => {
+  const { looksResolved } = req.body;
+  if (typeof looksResolved !== "boolean") {
+    return res.status(400).json({ error: "looksResolved must be a boolean." });
+  }
+  try {
+    const prisma = getPrisma();
+    const ticket = await prisma.ticket.findUnique({ where: { id: Number(req.params.id) } });
+    if (!ticket || ticket.requesterId !== req.user!.id) {
+      return res.status(404).json({ error: "Ticket not found." });
+    }
+    const updated = await prisma.ticket.update({
+      where: { id: ticket.id },
+      data: { looksResolvedByRequester: looksResolved },
+    });
+    res.status(200).json({
+      id: updated.id,
+      looksResolvedByRequester: updated.looksResolvedByRequester,
+    });
+  } catch (error) {
+    console.error("PATCH /api/tickets/:id/looks-resolved failed:", error);
+    res.status(500).json({ error: "Unable to update ticket." });
   }
 });
