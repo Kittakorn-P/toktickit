@@ -1,6 +1,7 @@
 import express, { Response } from "express";
 import { getPrisma } from "../prisma.js";
 import { requireAuth, requireRole } from "../middleware/requireAuth.js";
+import { canTransition } from "../utils/ticketTransitions.js";
 
 export const staffTicketsRouter = express.Router();
 
@@ -179,11 +180,12 @@ staffTicketsRouter.patch("/:id/priority", async (req, res: Response) => {
 });
 
 // ---------------------------------------------------------------------------
-// PATCH /api/staff/tickets/:id/status — BR-21 (role-gated, no transition
-// matrix restriction beyond that)
+// PATCH /api/staff/tickets/:id/status — LAB 4: now enforces the full
+// status-transition matrix (BR-08, specification.md §5.1) instead of just
+// the role gate, plus optimistic concurrency (BR-09).
 // ---------------------------------------------------------------------------
 staffTicketsRouter.patch("/:id/status", async (req, res: Response) => {
-  const { status } = req.body;
+  const { status, updatedAt } = req.body;
   if (!VALID_STATUSES.includes(status)) {
     return res.status(400).json({ error: "A valid status is required." });
   }
@@ -193,13 +195,153 @@ staffTicketsRouter.patch("/:id/status", async (req, res: Response) => {
     if (!ticket) {
       return res.status(404).json({ error: "Ticket not found." });
     }
+    if (!canTransition(ticket.currentStatus, status, req.user!.role)) {
+      return res.status(422).json({ error: `Cannot move from ${ticket.currentStatus} to ${status}.` });
+    }
+    if (updatedAt && new Date(updatedAt).getTime() !== ticket.updatedAt.getTime()) {
+      return res.status(409).json({ error: "This ticket was updated elsewhere.", current: ticket });
+    }
     const updated = await prisma.ticket.update({
       where: { id: ticket.id },
       data: { currentStatus: status },
     });
-    res.status(200).json({ id: updated.id, currentStatus: updated.currentStatus });
+    res.status(200).json({
+      id: updated.id,
+      currentStatus: updated.currentStatus,
+      updatedAt: updated.updatedAt,
+    });
   } catch (error) {
     console.error("PATCH /api/staff/tickets/:id/status failed:", error);
     res.status(500).json({ error: "Unable to update status." });
+  }
+});
+
+// ============================================================================
+// LAB 4 ADDITIONS — Actions Taken
+// ============================================================================
+
+// ---------------------------------------------------------------------------
+// GET /api/staff/tickets/:id/actions — any IT Staff/Admin (BR-02: not just
+// the Ticket Owner may view/act, since different staff can take action).
+// ---------------------------------------------------------------------------
+staffTicketsRouter.get("/:id/actions", async (req, res: Response) => {
+  try {
+    const prisma = getPrisma();
+    const ticket = await prisma.ticket.findUnique({ where: { id: Number(req.params.id) } });
+    if (!ticket) {
+      return res.status(404).json({ error: "Ticket not found." });
+    }
+    const actions = await prisma.actionTaken.findMany({
+      where: { ticketId: ticket.id },
+      orderBy: { actionDateTime: "asc" },
+      include: { performedBy: { select: { id: true, name: true } } },
+    });
+    res.status(200).json({ actions });
+  } catch (error) {
+    console.error("GET /api/staff/tickets/:id/actions failed:", error);
+    res.status(500).json({ error: "Unable to load actions taken." });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/staff/tickets/:id/actions — FR-01, FR-03, BR-03, BR-04.
+// performedBy/actionDateTime are always server-set — the request body is
+// never trusted for either.
+// ---------------------------------------------------------------------------
+staffTicketsRouter.post("/:id/actions", async (req, res: Response) => {
+  const { description, result, followUpRequired, followUpNote, attachmentNotes } = req.body;
+  const errors: Record<string, string> = {};
+
+  if (!description || typeof description !== "string" || !description.trim()) {
+    errors.description = "Description is required.";
+  }
+  if (!result || typeof result !== "string" || !result.trim()) {
+    errors.result = "Result is required.";
+  }
+  const followUp = Boolean(followUpRequired);
+  if (followUp && (!followUpNote || typeof followUpNote !== "string" || !followUpNote.trim())) {
+    errors.followUpNote = "Follow-up note is required when follow-up is needed.";
+  }
+
+  if (Object.keys(errors).length > 0) {
+    return res.status(422).json({ errors });
+  }
+
+  try {
+    const prisma = getPrisma();
+    const ticket = await prisma.ticket.findUnique({ where: { id: Number(req.params.id) } });
+    if (!ticket) {
+      return res.status(404).json({ error: "Ticket not found." });
+    }
+
+    const action = await prisma.actionTaken.create({
+      data: {
+        ticketId: ticket.id,
+        description: description.trim(),
+        result: result.trim(),
+        performedById: req.user!.id,
+        followUpRequired: followUp,
+        followUpNote: followUp ? followUpNote.trim() : null,
+        attachmentNotes: attachmentNotes?.trim() || null,
+      },
+      include: { performedBy: { select: { id: true, name: true } } },
+    });
+
+    res.status(201).json(action);
+  } catch (error) {
+    console.error("POST /api/staff/tickets/:id/actions failed:", error);
+    res.status(500).json({ error: "Unable to create action." });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// PATCH /api/staff/tickets/:id/actions/:actionId — BR-05, BR-09.
+// Author or Administrator only. actionDateTime/performedById/ticketId are
+// immutable — never accepted here.
+// ---------------------------------------------------------------------------
+staffTicketsRouter.patch("/:id/actions/:actionId", async (req, res: Response) => {
+  const { description, result, followUpRequired, followUpNote, attachmentNotes, updatedAt } = req.body;
+
+  try {
+    const prisma = getPrisma();
+    const action = await prisma.actionTaken.findUnique({ where: { id: Number(req.params.actionId) } });
+    if (!action || action.ticketId !== Number(req.params.id)) {
+      return res.status(404).json({ error: "Action not found." });
+    }
+
+    const isAuthor = action.performedById === req.user!.id;
+    const isAdmin = req.user!.role === "ADMINISTRATOR";
+    if (!isAuthor && !isAdmin) {
+      return res.status(403).json({ error: "You don't have access to edit this action." });
+    }
+
+    if (updatedAt && new Date(updatedAt).getTime() !== action.updatedAt.getTime()) {
+      return res.status(409).json({ error: "This action was modified elsewhere.", current: action });
+    }
+
+    const followUp = followUpRequired === undefined ? action.followUpRequired : Boolean(followUpRequired);
+    const resolvedNote = followUpNote !== undefined ? followUpNote : action.followUpNote;
+    if (followUp && !(resolvedNote && resolvedNote.trim())) {
+      return res.status(422).json({
+        errors: { followUpNote: "Follow-up note is required when follow-up is needed." },
+      });
+    }
+
+    const updated = await prisma.actionTaken.update({
+      where: { id: action.id },
+      data: {
+        ...(description !== undefined && { description: description.trim() }),
+        ...(result !== undefined && { result: result.trim() }),
+        followUpRequired: followUp,
+        followUpNote: followUp ? resolvedNote!.trim() : null,
+        ...(attachmentNotes !== undefined && { attachmentNotes: attachmentNotes?.trim() || null }),
+      },
+      include: { performedBy: { select: { id: true, name: true } } },
+    });
+
+    res.status(200).json(updated);
+  } catch (error) {
+    console.error("PATCH /api/staff/tickets/:id/actions/:actionId failed:", error);
+    res.status(500).json({ error: "Unable to update action." });
   }
 });

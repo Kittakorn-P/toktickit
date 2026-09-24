@@ -97,8 +97,15 @@ describe("PATCH /api/staff/tickets/:id/priority — BR-18", () => {
   });
 });
 
-describe("PATCH /api/staff/tickets/:id/status — BR-21", () => {
-  it("allows IT Staff to change status", async () => {
+describe("PATCH /api/staff/tickets/:id/status — BR-21, and BR-08 (Lab 4 matrix)", () => {
+  it("allows IT Staff to change status via a valid transition", async () => {
+    // NEW -> OPEN first, since NEW -> IN_PROGRESS directly is no longer a
+    // valid transition as of Lab 4's status-transition matrix.
+    await request(app)
+      .patch(`/api/staff/tickets/${ticketId}/status`)
+      .set("Cookie", staffCookie)
+      .send({ status: "OPEN" });
+
     const res = await request(app)
       .patch(`/api/staff/tickets/${ticketId}/status`)
       .set("Cookie", staffCookie)
@@ -121,5 +128,13 @@ describe("PATCH /api/staff/tickets/:id/status — BR-21", () => {
       .set("Cookie", staffCookie)
       .send({ status: "NOT_A_REAL_STATUS" });
     expect(res.status).toBe(400);
+  });
+
+  it("LAB 4: rejects a transition not permitted by the status matrix (already IN_PROGRESS here, so WAITING_FOR_REQUESTER is valid but RESOLVED -> back to NEW is not)", async () => {
+    const res = await request(app)
+      .patch(`/api/staff/tickets/${ticketId}/status`)
+      .set("Cookie", staffCookie)
+      .send({ status: "NEW" });
+    expect(res.status).toBe(422);
   });
 });
