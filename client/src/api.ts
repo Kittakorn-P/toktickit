@@ -99,6 +99,17 @@ export class ValidationError extends Error {
   }
 }
 
+// LAB 4 — thrown on a 409 (stale updatedAt). Carries the server's current
+// copy of the record so the caller can decide whether to just reload or
+// show the person what changed.
+export class ConflictError extends Error {
+  current: unknown;
+  constructor(message: string, current: unknown) {
+    super(message);
+    this.current = current;
+  }
+}
+
 export async function createTicket(input: CreateTicketInput): Promise<Ticket> {
   const res = await authFetch("/api/tickets", {
     method: "POST",
@@ -165,6 +176,7 @@ export async function getTickets(
 export interface TicketDetail extends Ticket {
   category: { id: number; name: string };
   relatedSystem: { id: number; name: string };
+  looksResolvedByRequester: boolean; // LAB 4
 }
 
 export interface AttachmentMeta {
@@ -344,6 +356,7 @@ export interface StaffTicketDetail {
   requestedPriority: string;
   itPriority: string;
   currentStatus: string;
+  looksResolvedByRequester: boolean; // LAB 4
   createdAt: string;
   updatedAt: string;
 }
@@ -376,12 +389,148 @@ export async function updateItPriority(ticketId: number, itPriority: string) {
   return res.json();
 }
 
-export async function updateTicketStatus(ticketId: number, status: string) {
+// LAB 4: now takes the last-known updatedAt (optimistic concurrency) and
+// surfaces 409/422 as distinct error types instead of one generic Error, so
+// the UI can tell "stale data, please refresh" apart from "not a valid
+// transition from here."
+export async function updateTicketStatus(ticketId: number, status: string, updatedAt?: string) {
   const res = await authFetch(`/api/staff/tickets/${ticketId}/status`, {
     method: "PATCH",
-    body: JSON.stringify({ status }),
+    body: JSON.stringify({ status, updatedAt }),
   });
+  if (res.status === 409) {
+    const body = await res.json().catch(() => ({}));
+    throw new ConflictError(body.error ?? "This ticket was updated elsewhere.", body.current);
+  }
+  if (res.status === 422) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "That status change isn't allowed from here.");
+  }
   if (!res.ok) throw new Error("Unable to update status.");
+  return res.json();
+}
+
+// ---------------------------------------------------------------------------
+// LAB 4 — Actions Taken
+// ---------------------------------------------------------------------------
+export interface ActionTaken {
+  id: number;
+  ticketId: number;
+  actionDateTime: string;
+  description: string;
+  result: string;
+  performedBy: { id: number; name: string };
+  followUpRequired: boolean;
+  followUpNote: string | null;
+  attachmentNotes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Requester — read-only, own ticket only (enforced server-side).
+export async function getTicketActions(ticketId: number): Promise<ActionTaken[]> {
+  const res = await authFetch(`/api/tickets/${ticketId}/actions`);
+  if (!res.ok) throw new Error("Unable to load actions taken.");
+  const body = await res.json();
+  return body.actions;
+}
+
+// IT Staff/Admin — any ticket they can access.
+export async function getStaffTicketActions(ticketId: number): Promise<ActionTaken[]> {
+  const res = await authFetch(`/api/staff/tickets/${ticketId}/actions`);
+  if (!res.ok) throw new Error("Unable to load actions taken.");
+  const body = await res.json();
+  return body.actions;
+}
+
+export interface CreateActionInput {
+  description: string;
+  result: string;
+  followUpRequired: boolean;
+  followUpNote?: string;
+  attachmentNotes?: string;
+}
+
+export async function createAction(ticketId: number, input: CreateActionInput): Promise<ActionTaken> {
+  const res = await authFetch(`/api/staff/tickets/${ticketId}/actions`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  if (res.status === 422) {
+    const body = await res.json().catch(() => ({}));
+    throw new ValidationError(body.errors ?? { _: body.error ?? "Invalid action." });
+  }
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "Unable to create action.");
+  }
+  return res.json();
+}
+
+export interface UpdateActionInput {
+  description?: string;
+  result?: string;
+  followUpRequired?: boolean;
+  followUpNote?: string | null;
+  attachmentNotes?: string | null;
+  updatedAt: string;
+}
+
+export async function updateAction(
+  ticketId: number,
+  actionId: number,
+  input: UpdateActionInput
+): Promise<ActionTaken> {
+  const res = await authFetch(`/api/staff/tickets/${ticketId}/actions/${actionId}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+  if (res.status === 409) {
+    const body = await res.json().catch(() => ({}));
+    throw new ConflictError(body.error ?? "This action was modified elsewhere.", body.current);
+  }
+  if (res.status === 422) {
+    const body = await res.json().catch(() => ({}));
+    throw new ValidationError(body.errors ?? { _: body.error ?? "Invalid action." });
+  }
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "Unable to update action.");
+  }
+  return res.json();
+}
+
+// ---------------------------------------------------------------------------
+// LAB 4 — Requester Reopen + Looks Resolved
+// ---------------------------------------------------------------------------
+export async function reopenTicket(ticketId: number): Promise<{ id: number; currentStatus: string }> {
+  const res = await authFetch(`/api/tickets/${ticketId}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status: "REOPENED" }),
+  });
+  if (res.status === 422) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "This ticket can't be reopened right now.");
+  }
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "Unable to reopen ticket.");
+  }
+  return res.json();
+}
+
+export async function setLooksResolved(
+  ticketId: number,
+  looksResolved: boolean
+): Promise<{ id: number; looksResolvedByRequester: boolean }> {
+  const res = await authFetch(`/api/tickets/${ticketId}/looks-resolved`, {
+    method: "PATCH",
+    body: JSON.stringify({ looksResolved }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "Unable to update ticket.");
+  }
   return res.json();
 }
 

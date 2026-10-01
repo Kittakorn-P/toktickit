@@ -9,6 +9,9 @@ function renderDetail(ticketId = "1") {
   vi.spyOn(api, "getCurrentUser").mockResolvedValue({
     id: 1, name: "Jennifer Anderson", role: "REQUESTER", mustChangePassword: false,
   });
+  // LAB 4: default every test to an empty Actions Taken list so existing
+  // tests that don't care about Actions Taken don't each have to mock it.
+  vi.spyOn(api, "getTicketActions").mockResolvedValue([]);
   return render(
     <MemoryRouter initialEntries={[`/tickets/${ticketId}`]}>
       <AuthProvider>
@@ -19,11 +22,12 @@ function renderDetail(ticketId = "1") {
     </MemoryRouter>
   );
 }
-
+ 
 const sampleTicket = {
   id: 1, ticketNumber: "TKT-2026-000001", requesterId: 1, categoryId: 1, relatedSystemId: 1,
   summary: "Laptop battery drains quickly", description: "Drains fast even when idle.",
   requestedPriority: "MEDIUM", currentStatus: "NEW",
+  looksResolvedByRequester: false, // LAB 4 — now required by the TicketDetail type
   createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z",
   category: { id: 1, name: "Hardware" }, relatedSystem: { id: 1, name: "Corporate Laptop" },
 };
@@ -37,9 +41,9 @@ describe("TicketDetail", () => {
     vi.spyOn(api, "getComments").mockResolvedValue([]);
 
     renderDetail();
-    expect(await screen.findByDisplayValue("TKT-2026-000001")).toBeInTheDocument();
+    expect(await screen.findByText("screenshot.png")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("TKT-2026-000001")).toBeInTheDocument();
     expect(screen.getByText("Laptop battery drains quickly")).toBeInTheDocument();
-    expect(screen.getByText("screenshot.png")).toBeInTheDocument();
   });
 
   it("shows a not-found message for a ticket that does not exist or is not owned", async () => {

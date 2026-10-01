@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
+import { waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import StaffTicketDetail from "../../src/pages/StaffTicketDetail.js";
 import { AuthProvider } from "../../src/context/AuthContext.js";
@@ -9,6 +10,9 @@ function renderDetail(ticketId = "1") {
   vi.spyOn(api, "getCurrentUser").mockResolvedValue({
     id: 10, name: "Priya Nair", role: "IT_STAFF", mustChangePassword: false,
   });
+  // LAB 4: default every test to an empty Actions Taken list so existing
+  // tests that don't care about Actions Taken don't each have to mock it.
+  vi.spyOn(api, "getStaffTicketActions").mockResolvedValue([]);
   return render(
     <MemoryRouter initialEntries={[`/queue/${ticketId}`]}>
       <AuthProvider>
@@ -26,6 +30,7 @@ const sampleTicket = {
   category: { id: 1, name: "Hardware" }, relatedSystem: { id: 1, name: "Corporate Laptop" },
   requester: { id: 1, name: "Jennifer Anderson", email: "jennifer@example.com" },
   owner: null, requestedPriority: "MEDIUM", itPriority: "MEDIUM", currentStatus: "NEW",
+  looksResolvedByRequester: false, // ADD THIS LINE
   createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z",
 };
 
@@ -48,7 +53,7 @@ describe("StaffTicketDetail", () => {
     renderDetail();
     fireEvent.click(await screen.findByText("Claim Ticket"));
 
-    expect(claimSpy).toHaveBeenCalledWith(1, 10);
+    await waitFor(() => expect(claimSpy).toHaveBeenCalledWith(1, 10));
   });
 
   it("distinguishes Internal Notes from Public Comments via separate tabs", async () => {
