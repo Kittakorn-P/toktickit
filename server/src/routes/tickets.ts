@@ -10,6 +10,10 @@ export const ticketsRouter = express.Router();
 ticketsRouter.use(requireAuth, requireRole("REQUESTER"));
 
 const VALID_PRIORITIES = ["LOW", "MEDIUM", "HIGH"];
+const VALID_TICKET_STATUSES = [
+  "NEW", "OPEN", "IN_PROGRESS", "WAITING_FOR_REQUESTER",
+  "RESOLVED", "CLOSED", "REOPENED", "CANCELLED",
+];
 
 ticketsRouter.post("/", async (req, res: Response) => {
   const { categoryId, relatedSystemId, summary, description, requestedPriority } = req.body;
@@ -95,7 +99,14 @@ ticketsRouter.get("/", async (req, res: Response) => {
     const priorityFilter = typeof req.query.requestedPriority === "string"
       ? req.query.requestedPriority
       : undefined;
-    const statusFilter = typeof req.query.status === "string" ? req.query.status : undefined;
+    // LAB 4: supports a comma-separated list ("NEW,OPEN,REOPENED") so
+    // dashboard drill-down cards that group several statuses together
+    // (e.g. "My Open Tickets") can link here directly, not just a single
+    // status at a time.
+    const statusParam = typeof req.query.status === "string" ? req.query.status : undefined;
+    const statusList = statusParam
+      ? statusParam.split(",").filter((s) => VALID_TICKET_STATUSES.includes(s))
+      : [];
 
     const sortParam = typeof req.query.sort === "string" ? req.query.sort : "-createdAt";
     const sortField = SORT_FIELDS[sortParam] ?? "createdAt";
@@ -117,7 +128,7 @@ ticketsRouter.get("/", async (req, res: Response) => {
       }),
       ...(Number.isInteger(categoryFilter) && { categoryId: categoryFilter }),
       ...(priorityFilter && { requestedPriority: priorityFilter as never }),
-      ...(statusFilter && { currentStatus: statusFilter as never }),
+      ...(statusList.length > 0 && { currentStatus: { in: statusList as never[] } }),
     };
 
     const [tickets, totalItems] = await Promise.all([
