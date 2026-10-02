@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { getTickets, TicketListItem, PaginationMeta } from "../api.js";
 import { useAuth } from "../context/AuthContext.js";
 
@@ -17,15 +17,32 @@ export default function MyTickets() {
   const location = useLocation();
   const justCreated = (location.state as { justCreated?: string } | null)?.justCreated;
 
+  // LAB 4: filters can now arrive via the URL (e.g. a Dashboard drill-down
+  // link to /tickets?status=NEW,OPEN,REOPENED), not just from the controls
+  // on this page.
+  const [searchParams] = useSearchParams();
+
   const [tickets, setTickets] = useState<TicketListItem[]>([]);
   const [pagination, setPagination] = useState<PaginationMeta | null>(null);
   const [loadState, setLoadState] = useState<LoadState>("loading");
-  const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("");
-  const [priority, setPriority] = useState("");
-  const [status, setStatus] = useState("");
-  const [sort, setSort] = useState("-createdAt");
+  const [search, setSearch] = useState(searchParams.get("search") ?? "");
+  const [category, setCategory] = useState(searchParams.get("category") ?? "");
+  const [priority, setPriority] = useState(searchParams.get("requestedPriority") ?? "");
+  const [status, setStatus] = useState(searchParams.get("status") ?? "");
+  const [sort, setSort] = useState(searchParams.get("sort") ?? "-createdAt");
   const [page, setPage] = useState(1);
+
+  // Re-sync from the URL if it changes while this page stays mounted (e.g.
+  // clicking a different Dashboard card without navigating away first).
+  useEffect(() => {
+    setSearch(searchParams.get("search") ?? "");
+    setCategory(searchParams.get("category") ?? "");
+    setPriority(searchParams.get("requestedPriority") ?? "");
+    setStatus(searchParams.get("status") ?? "");
+    setSort(searchParams.get("sort") ?? "-createdAt");
+    setPage(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   useEffect(() => {
     setLoadState("loading");

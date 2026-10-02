@@ -535,6 +535,39 @@ export async function setLooksResolved(
 }
 
 // ---------------------------------------------------------------------------
+// LAB 4 — Dashboards
+// ---------------------------------------------------------------------------
+export interface DashboardTicketSummary {
+  id: number;
+  code: string;
+  title: string;
+  status: string;
+  updatedAt: string;
+}
+
+export interface RequesterDashboardData {
+  metrics: { myOpen: number; inProgress: number; resolved: number; closed: number };
+  recentTickets: DashboardTicketSummary[];
+}
+
+export async function getRequesterDashboard(): Promise<RequesterDashboardData> {
+  const res = await authFetch("/api/dashboard/requester");
+  if (!res.ok) throw new Error("Unable to load dashboard.");
+  return res.json();
+}
+
+export interface StaffDashboardData {
+  metrics: { new: number; open: number; inProgress: number; waitingForRequester: number; myAssigned: number };
+  recentTickets: DashboardTicketSummary[];
+}
+
+export async function getStaffDashboard(): Promise<StaffDashboardData> {
+  const res = await authFetch("/api/dashboard/staff");
+  if (!res.ok) throw new Error("Unable to load dashboard.");
+  return res.json();
+}
+
+// ---------------------------------------------------------------------------
 // Lab 3 — Public Comments (shared) + Internal Notes (staff/admin only)
 // ---------------------------------------------------------------------------
 export interface CommentItem {

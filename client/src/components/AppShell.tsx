@@ -1,6 +1,12 @@
 import { useState } from "react";
-import { Outlet, Link, useNavigate } from "react-router-dom";
+import { Outlet, Link, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.js";
+
+// LAB 4: switched from plain Link to NavLink for every nav item so there's
+// an actual active-page indication (ui-spec.md §1/§6 checklist) — the
+// previous version had no active-state styling at all, for any item.
+const navLinkClass = ({ isActive }: { isActive: boolean }) =>
+  `text-white text-decoration-none${isActive ? " fw-bold text-decoration-underline" : ""}`;
 
 export default function AppShell() {
   const { user, logout } = useAuth();
@@ -25,17 +31,19 @@ export default function AppShell() {
             ☰
           </button>
           <div className="d-none d-md-flex align-items-center gap-4">
+            {/* LAB 4: Dashboard nav item, same for every authenticated role */}
+            <NavLink to="/dashboard" className={navLinkClass}>Dashboard</NavLink>
             {user?.role === "REQUESTER" && (
               <>
-                <Link to="/tickets" className="text-white text-decoration-none">My Tickets</Link>
-                <Link to="/create-ticket" className="text-white text-decoration-none">Create Ticket</Link>
+                <NavLink to="/tickets" className={navLinkClass}>My Tickets</NavLink>
+                <NavLink to="/create-ticket" className={navLinkClass}>Create Ticket</NavLink>
               </>
             )}
             {(user?.role === "IT_STAFF" || user?.role === "ADMINISTRATOR") && (
-              <Link to="/queue" className="text-white text-decoration-none">My Queue</Link>
+              <NavLink to="/queue" className={navLinkClass}>My Queue</NavLink>
             )}
             {user?.role === "ADMINISTRATOR" && (
-              <Link to="/admin/users" className="text-white text-decoration-none">Users</Link>
+              <NavLink to="/admin/users" className={navLinkClass}>Users</NavLink>
             )}
           </div>
           <div className="d-none d-md-flex align-items-center gap-2">
@@ -46,17 +54,18 @@ export default function AppShell() {
 
         {menuOpen && (
           <div className="d-md-none d-flex flex-column gap-2 mt-2 pt-2 border-top border-light">
+            <NavLink to="/dashboard" className={navLinkClass} onClick={() => setMenuOpen(false)}>Dashboard</NavLink>
             {user?.role === "REQUESTER" && (
               <>
-                <Link to="/tickets" className="text-white text-decoration-none" onClick={() => setMenuOpen(false)}>My Tickets</Link>
-                <Link to="/create-ticket" className="text-white text-decoration-none" onClick={() => setMenuOpen(false)}>Create Ticket</Link>
+                <NavLink to="/tickets" className={navLinkClass} onClick={() => setMenuOpen(false)}>My Tickets</NavLink>
+                <NavLink to="/create-ticket" className={navLinkClass} onClick={() => setMenuOpen(false)}>Create Ticket</NavLink>
               </>
             )}
             {(user?.role === "IT_STAFF" || user?.role === "ADMINISTRATOR") && (
-              <Link to="/queue" className="text-white text-decoration-none" onClick={() => setMenuOpen(false)}>My Queue</Link>
+              <NavLink to="/queue" className={navLinkClass} onClick={() => setMenuOpen(false)}>My Queue</NavLink>
             )}
             {user?.role === "ADMINISTRATOR" && (
-              <Link to="/admin/users" className="text-white text-decoration-none" onClick={() => setMenuOpen(false)}>Users</Link>
+              <NavLink to="/admin/users" className={navLinkClass} onClick={() => setMenuOpen(false)}>Users</NavLink>
             )}
             <span className="text-white small">{user?.name} · {user?.role}</span>
             <button className="btn btn-outline-light btn-sm" onClick={handleLogout}>Logout</button>

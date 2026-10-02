@@ -12,6 +12,7 @@ import { commentsRouter } from "./routes/comments.js";
 import { notesRouter } from "./routes/notes.js";
 import { staffTicketsRouter } from "./routes/staffTickets.js";
 import { adminRouter } from "./routes/admin.js";
+import { dashboardRouter } from "./routes/dashboard.js";
 void getPrisma;
 
 export const app = express();
@@ -48,6 +49,7 @@ app.use("/api/related-systems", relatedSystemsRouter);
 app.use("/api/requesters", requestersRouter);
 app.use("/api/staff/tickets", staffTicketsRouter);
 app.use("/api/admin", adminRouter);
+app.use("/api/dashboard", dashboardRouter);
 app.use("/api/tickets", commentsRouter);
 app.use("/api/tickets", notesRouter);
 app.use("/api/tickets", ticketsRouter);

@@ -34,7 +34,13 @@ staffTicketsRouter.get("/", async (req, res: Response) => {
     const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
     const categoryFilter = Number(req.query.category);
     const itPriorityFilter = typeof req.query.itPriority === "string" ? req.query.itPriority : undefined;
-    const statusFilter = typeof req.query.status === "string" ? req.query.status : undefined;
+    // LAB 4: comma-separated list support, same reason as the Requester
+    // ticket list — dashboard cards that group multiple statuses together
+    // need to drill down to more than one status at once.
+    const statusParam = typeof req.query.status === "string" ? req.query.status : undefined;
+    const statusList = statusParam
+      ? statusParam.split(",").filter((s) => VALID_STATUSES.includes(s))
+      : [];
     const ownerParam = typeof req.query.owner === "string" ? req.query.owner : undefined;
 
     const sortParam = typeof req.query.sort === "string" ? req.query.sort : "-createdAt";
@@ -63,7 +69,7 @@ staffTicketsRouter.get("/", async (req, res: Response) => {
       }),
       ...(Number.isInteger(categoryFilter) && { categoryId: categoryFilter }),
       ...(itPriorityFilter && VALID_PRIORITIES.includes(itPriorityFilter) && { itPriority: itPriorityFilter as never }),
-      ...(statusFilter && VALID_STATUSES.includes(statusFilter) && { currentStatus: statusFilter as never }),
+      ...(statusList.length > 0 && { currentStatus: { in: statusList as never[] } }),
       ...ownerClause,
     };
 
