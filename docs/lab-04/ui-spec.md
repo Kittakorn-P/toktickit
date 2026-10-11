@@ -1,150 +1,191 @@
 # TokTickIT — Sprint 4 UI Specification
 
-Extends the Zen Green UI established in Lab 2 and extended in Lab 3. Reuses existing
-badge, tab, button, form, table, card, loading, empty, and error conventions — no new
-visual language is introduced in Lab 4.
+Extends the Zen Green UI established in Lab 2 and extended in Lab 3. Reuses the
+existing badge, button, form, table, card, loading, empty, and error conventions;
+no new visual language is introduced in Lab 4.
+
+> **Revision note:** this file was first written before implementation and has been
+> revised to describe what actually shipped. The original draft is in git history.
+> Where the build differs from that draft, it is listed in §7.
 
 ---
 
 ## 1. Navigation
 
-- Add a **Dashboard** nav item, role-aware:
-  - Requester → routes to Requester Dashboard, label "Dashboard"
-  - IT Staff / Admin → routes to Staff Dashboard, label "Dashboard"
-- Active-page indication (existing underline/highlight convention) applies to Dashboard
-  like every other nav item.
-- Dashboard is the default landing route after login for all roles (replacing the
-  previous default of My Tickets / Ticket Queue).
+- A **Dashboard** nav item is shown to every role and links to `/dashboard`.
+- Every nav item (Dashboard, My Tickets, Create Ticket, My Queue, Users) is a
+  `NavLink`. The active page is shown **bold and underlined** (a non-color cue).
+  Lab 3's nav had no active-page indication at all, so this is new in Lab 4.
+- On narrow screens the nav collapses behind a ☰ button; the same links appear in the
+  expanded menu.
+- `/` redirects every role to `/dashboard`. This replaces the Lab 3 per-role redirect
+  (Requester → My Tickets, IT Staff → Queue, Administrator → Users).
 
-## 2. IT Staff / Admin Dashboard
+## 2. IT Staff / Administrator Dashboard
 
-**Route:** `/dashboard` (staff/admin)
+**Route:** `/dashboard` (IT Staff and Administrator share this screen).
 
-**Layout (desktop):** 5 metric cards in a single row → 2 content panels below
-(70/30 split: "My Recent Tickets" list / "Quick Actions").
+**Header:** "Welcome back, {name}!" and a one-line subtitle.
 
-**Metric cards** (label / value / delta vs. yesterday, optional):
-| Card | Metric | Drill-down |
+**Metric cards** (label + value; each card is a link):
+
+| Card | Metric | Drill-down link |
 |---|---|---|
-| New | count, status = New | Ticket Queue filtered `status=New` |
-| Open | count, status = Open | Ticket Queue filtered `status=Open` |
-| In Progress | count, status = In Progress | Ticket Queue filtered `status=In Progress` |
-| Waiting for Requester | count, status = Waiting for Requester | Ticket Queue filtered accordingly |
-| My Assigned | count, ownerId = current user, status not in {Closed, Cancelled} | Ticket Queue filtered `owner=me` |
+| New | tickets with status New | `/queue?status=NEW` |
+| Open | status Open | `/queue?status=OPEN` |
+| In Progress | status In Progress | `/queue?status=IN_PROGRESS` |
+| Waiting for Requester | status Waiting for Requester | `/queue?status=WAITING_FOR_REQUESTER` |
+| My Assigned | owned by the current user, status not Closed/Cancelled | `/queue?owner={current user id}` |
 
-**My Recent Tickets:** last 5 tickets touched by/relevant to the current user
-(owned or acted-on), sorted by `updatedAt` desc, each row → Ticket Detail. "View all"
-→ full Ticket Queue.
+The first four are organization-wide counts; only My Assigned is scoped to the caller.
+All counts are calculated by the backend (`GET /api/dashboard/staff`).
 
-**Quick Actions:** Create Ticket, Search Tickets, My Queue (existing actions, reused).
+**My Recent Tickets:** up to 5 tickets the caller owns *or* has recorded an Action
+Taken on, newest-updated first. Each row (ticket number, summary, status badge) links
+to `/queue/{id}`. "View all" links to `/queue`.
 
-**States:**
-- *Loading:* skeleton cards + skeleton rows (existing shimmer pattern), no layout shift
-  once data arrives.
-- *Empty (My Recent Tickets):* "No recent activity yet" with a Create Ticket CTA.
-- *Forbidden:* not applicable at the page level (route is role-gated); a metric card
-  whose query the user isn't authorized for is simply not rendered rather than shown
-  with an error.
-- *Safe failure:* if a metric fetch fails, that card shows "—" with a retry icon and a
-  toast; other cards render independently (partial failure isolation, not a full-page
-  error).
+**Quick Actions:** Search Tickets (`/queue`) and My Queue (`/queue?owner={id}`).
 
-**Responsive:**
-- Tablet: cards wrap 3+2; My Recent Tickets and Quick Actions stack vertically.
-- Mobile: cards stack 1-per-row; Quick Actions become a horizontal icon row above the
-  list; no horizontal scrolling anywhere.
+**States**
+- *Loading:* five skeleton placeholder cards.
+- *Empty:* "No recent activity yet." in the recent-tickets panel; metric cards show 0.
+- *Failure:* a single error alert, "Unable to load your dashboard right now. Please try
+  again." The whole dashboard fails together (see §7).
+- *Forbidden:* the endpoint returns 403 to a Requester. The UI never routes a Requester
+  to the staff dashboard, so this is only reachable by a hand-crafted request.
+
+**Responsive** (Bootstrap grid): at 768px and up the five cards share one row and the
+recent-tickets and Quick Actions panels sit side by side (2/3 and 1/3 width). Below
+768px the cards wrap two per row and the two panels stack vertically.
 
 ## 3. Requester Dashboard
 
-**Route:** `/dashboard` (requester)
+**Route:** `/dashboard` (Requester).
 
-**Layout:** 4 metric cards → "My Recent Tickets" / "Quick Actions" panels (same
-70/30 pattern as staff, scaled to 4 cards).
+**Metric cards** (backend: `GET /api/dashboard/requester`, always scoped to the
+logged-in Requester; the endpoint accepts no user id):
 
-**Metric cards:**
-| Card | Metric | Drill-down |
+| Card | Metric | Drill-down link |
 |---|---|---|
-| My Open Tickets | count, requesterId = me, status in {New, Open, Reopened} | My Tickets filtered |
-| In Progress | count, requesterId = me, status in {In Progress, Waiting for Requester} | My Tickets filtered |
-| Resolved | count, requesterId = me, status = Resolved | My Tickets filtered |
-| Closed | count, requesterId = me, status = Closed | My Tickets filtered |
+| My Open Tickets | status New, Open, or Reopened | `/tickets?status=NEW,OPEN,REOPENED` |
+| In Progress | status In Progress or Waiting for Requester | `/tickets?status=IN_PROGRESS,WAITING_FOR_REQUESTER` |
+| Resolved | status Resolved | `/tickets?status=RESOLVED` |
+| Closed | status Closed | `/tickets?status=CLOSED` |
 
-**My Recent Tickets:** last 5 of the Requester's own tickets by `updatedAt` desc.
-**Quick Actions:** Create Ticket, View My Tickets.
+**My Recent Tickets:** the Requester's 5 most recently updated tickets, each linking to
+`/tickets/{id}`; "View all" links to `/tickets`.
 
-**States:** same loading/empty/safe-failure conventions as §2, scoped to the
-authenticated Requester only. Backend ownership enforcement means there is no
-"forbidden" state reachable from this screen under normal use — attempting to fetch
-another user's dashboard via a crafted request returns 403 and the UI treats that as a
-generic error toast (no data shown).
+**Quick Actions:** "+ Create Ticket" (`/create-ticket`) and "View My Tickets" (`/tickets`).
 
-**Responsive:** same breakpoints/behavior as §2.
+**States and responsive behavior:** same as §2. Four cards share a row at 768px and up
+and wrap two per row below that.
 
-## 4. Actions Taken Panel (Ticket Detail)
+## 4. List screens: drill-down support
 
-**Location:** new section on the existing Ticket Detail screen, below the Ticket
-summary/status area and above (or alongside, per existing layout) Comments/Notes.
+- **My Tickets** reads `search`, `category`, `requestedPriority`, `status`, and `sort`
+  from the URL on load and when the URL changes.
+- **My Queue** reads `search`, `itPriority`, `status`, `owner`, and `sort` the same way.
+  When `owner` equals the current user's id the heading becomes "My Assigned Tickets",
+  and whenever any filter is active a "Filtered view / Clear Filters" bar is shown.
+- `status` accepts a comma-separated list. The status dropdown has no single option for a
+  multi-status value, so it will not show a matching selection, but the filter is applied.
 
-**View mode (all roles with access to the Ticket):**
-- Table/list, oldest → newest, each row: Action Date/Time, Description (truncated with
-  expand), Result, Performed By, Follow-Up badge (Yes/No — non-color icon + text, not
-  color alone), Attachment Notes.
-- Requesters see this exact list, read-only — no Add/Edit controls rendered (not just
-  disabled) for Requester role.
+## 5. Ticket Detail
 
-**Create mode (IT Staff/Admin only):**
-- "Add Action" button above the list opens an inline form (not a modal, to avoid the
-  inaccessible-modal pitfall) with fields: Description (textarea, required), Result
-  (textarea, required), Follow-Up Required? (toggle/checkbox), Follow-up Note
-  (textarea, shown/required only when Follow-Up = yes), Attachment Notes (text,
-  optional).
-- Action Date/Time and Performed By are not editable inputs — shown as read-only
-  preview text ("will be recorded as you, now") before submit.
-- Submit disabled while a request is in flight (prevents duplicate-click double
-  submission per §8.5 of the handout).
+### 5.1 Actions Taken: IT Staff / Administrator view
 
-**Edit mode (author or Admin):**
-- "Edit" affordance per row (visible only to the author/Admin per BR from
-  specification.md); reuses the same inline form pre-filled; Action Date/Time and
-  Performed By remain read-only.
+A card titled "Actions Taken (n)" sits below the ticket summary/description and above
+the Comments/Notes card.
 
-**States:**
-- *Empty:* "No actions recorded yet" (+ "Add the first action" CTA for IT Staff/Admin).
-- *Validation:* inline field errors (e.g., missing Follow-up Note when Follow-Up = yes),
-  matching existing form-error styling; focus moves to the first invalid field.
-- *Conflict (409):* toast "This ticket was updated elsewhere — refreshing" and the panel
-  reloads before allowing another submit.
-- *Forbidden:* Add/Edit controls simply absent for unauthorized roles (backend is the
-  real gate; this is presentation only).
+- **List:** oldest to newest. Each entry shows date/time, a follow-up badge, Description,
+  Result, the Follow-up note (only when follow-up is required), Attachment notes (only
+  when present), and "Performed by {name}".
+- **Follow-up badge:** "⚠ Follow-up needed" or "✓ No follow-up". The meaning is carried
+  by the icon and text, not by color alone.
+- **Add:** a "+ Add Action" button in the card header opens an **inline form** (no modal)
+  with Action Description*, Result*, Follow-Up Required? (checkbox), Follow-up Note (shown
+  only when the checkbox is on), and Attachment Notes. Action date/time and Performed by
+  are not form inputs; the server records them (the author and "now").
+- **Edit:** an "Edit" button on each entry reopens the same form pre-filled. Any IT Staff
+  member or Administrator may edit any action; it is not limited to the author.
+- **While saving:** the submit button shows "Saving…" and is disabled, and Cancel is
+  disabled, so a double click cannot submit twice.
+- **Closed or Cancelled tickets:** Add and Edit are hidden and the card shows "This ticket
+  is {closed|cancelled}: actions can no longer be added or edited."
+- **Validation:** field errors from the API (e.g. a missing Follow-up Note) appear inline
+  under the field; other errors appear in an alert at the top of the form. The form stays
+  open and keeps what was typed.
+- **Stale edit (409):** the form shows "This action was updated elsewhere: refreshing."
+  and the list reloads.
+- **Empty:** "No actions recorded yet."
 
-## 5. Ticket Status Control
+### 5.2 Actions Taken: Requester view
 
-- Existing status badge/control on Ticket Detail is extended to only list transitions
-  valid for (current status × current user's role) per specification.md §5.1.
-- If no transitions are available (terminal state, or role has none from this status),
-  the control renders disabled with a tooltip/helper text explaining why.
-- On successful transition, the Ticket summary badge and any dependent UI (e.g.,
-  Actions Taken empty-state prompts) refresh without a full page reload.
-- Requester-only affordance: "Looks Resolved" toggle/button, visually distinct from the
-  status control, with helper text clarifying it does not change the Ticket status by
-  itself. When set, IT Staff/Admin see an indicator on the Ticket ("Requester indicates
-  resolved") near the status control.
+The same list on the Requester's own ticket, read-only. No Add or Edit controls are
+rendered at all. It appears after the Looks-Resolved/Reopen buttons and above
+Attachments.
+
+### 5.3 Ticket status control (IT Staff / Administrator)
+
+- The status dropdown lists the current status plus only the transitions permitted from
+  it (client copy of the matrix in `specification.md` §5.1). The backend re-checks every
+  change.
+- When no transition is available (Closed, Cancelled) or a save is in progress, the
+  dropdown is disabled; with no transitions, helper text reads "No further transitions
+  available from this status."
+- A rejected change (422) or a stale one (409) shows an alert above the summary; a stale
+  change also reloads the ticket.
+- When the Requester has marked the ticket as appearing resolved, a **"Requester
+  indicates resolved"** badge appears next to the Current Status label.
+
+### 5.4 Looks Resolved and Reopen (Requester)
+
+- **"Mark Problem as Resolved"** sets an advisory flag only; the ticket status does not
+  change. After it is set the button reads "✓ Marked as appears resolved", is disabled,
+  and the page says "Thanks — IT Staff will confirm final resolution." The flag survives
+  a reload. The UI has no way to unset it (the API does).
+- **"Reopen Ticket"** appears only while the ticket is Resolved and moves it to Reopened.
+- The Requester's screen has no status dropdown, so no other transition is offered.
 
 ## 6. Visual, Accessibility & Responsive Checklist (Lab 4)
 
-- [ ] Dashboard nav item present for all roles with correct active-state
-- [ ] All metric cards have a visible label + value + accessible name (not icon-only)
-- [ ] Follow-Up status uses icon + text, never color alone
-- [ ] All interactive elements (cards, rows, buttons, toggles) have visible keyboard
-      focus and are reachable via Tab in a logical order
-- [ ] Actions Taken form fields have `label`/`for`–`id` pairing (per the Lab 3
-      accessibility fix — do not regress it)
-- [ ] Inline Actions Taken form used instead of a modal (avoids inaccessible-modal
-      dialog issue)
-- [ ] No clipped content, overlapping controls, or horizontal page scroll at
-      320px/768px/1024px+ widths
-- [ ] Loading, empty, forbidden, and safe-failure states verified for every new screen
-      (both dashboards, Actions Taken panel)
-- [ ] No leftover temporary/duplicate/obsolete elements from Labs 1–3
-- [ ] Desktop, tablet, and mobile screenshots captured for both dashboards and the
-      Actions Taken panel (for `artifacts/lab-04/screenshots/`)
+Screenshots (desktop 1280×900, tablet 820×1180, mobile 375×812) are generated by
+`e2e/lab-04/responsive.spec.ts` into `artifacts/lab-04/screenshots/`.
+
+- [x] Dashboard nav item shown to all roles with an active-page indication (bold +
+      underline; asserted in `e2e/lab-04/dashboards.spec.ts`)
+- [x] Metric cards have a visible label and value and an accessible name (each card is a
+      link; asserted by link name in the dashboard component tests)
+- [x] Follow-up status uses icon + text, never color alone
+- [x] Actions Taken form fields have `label`/`for`–`id` pairing (tests find them with
+      `getByLabel`)
+- [x] Actions Taken uses an inline form, not a modal
+- [x] Loading, empty, failure, and forbidden states exist for both dashboards and the
+      Actions Taken card (forbidden = controls not rendered / API 403; see §2)
+- [x] Desktop, tablet, and mobile screenshots captured for both dashboards and the
+      Actions Taken list and add form
+- [ ] Keyboard-only pass (Tab order, visible focus). Dashboards, nav, and the new forms
+      use native links, buttons, and inputs, but a manual pass has not been done yet.
+- [ ] No clipped content, overlapping controls, or horizontal scroll: confirm by looking
+      at the screenshots. Only 375, 820, and 1280px widths were captured; 320px was not.
+- [ ] No leftover temporary/obsolete elements from Labs 1–3: the Lab 2 Development
+      Requester scaffolding (`/api/requesters`, `getRequesters`, `requesterHeaders`) is
+      still in the code base and has not been removed or confirmed unused.
+
+## 7. Known gaps and deviations from the original draft
+
+**Deviations (decided during implementation):**
+- Dashboards load and fail as a whole, not per card. Every other screen in the app uses
+  one load state, and per-card isolation would need several endpoints.
+- No "change since yesterday" figure on the cards.
+- Failure feedback is an inline alert, not a toast.
+- Description text is shown in full (no truncate/expand).
+- No focus move to the first invalid field after a failed submit.
+- Staff Quick Actions have no Create Ticket (IT Staff do not create tickets).
+
+**Known accessibility gaps (inherited from Labs 2–3, not introduced in Lab 4):**
+- The Status, IT Priority, and Ticket Owner controls, and the read-only fields on both
+  Ticket Detail screens, have no `htmlFor`/`id` pairing with their labels.
+- The clickable rows and cards on My Tickets and My Queue respond to the mouse only; they
+  are not keyboard focusable. The dashboard's recent-ticket rows are real links and are
+  not affected.
