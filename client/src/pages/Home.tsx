@@ -1,9 +1,10 @@
 import { Navigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext.js";
 
-// LAB 4: Dashboard is now the landing page for every role (ui-spec.md §1),
-// replacing the old per-role redirect (Requester -> /tickets, Admin ->
-// /admin/users, IT Staff -> /queue). The Dashboard route itself picks which
-// dashboard to render based on role.
 export default function Home() {
-  return <Navigate to="/dashboard" replace />;
+  const { user } = useAuth();
+  if (!user) return null;
+  if (user.role === "REQUESTER") return <Navigate to="/tickets" replace />;
+  if (user.role === "ADMINISTRATOR") return <Navigate to="/admin/users" replace />;
+  return <Navigate to="/queue" replace />;
 }
