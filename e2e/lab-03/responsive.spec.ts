@@ -28,11 +28,7 @@ for (const [name, size] of Object.entries(VIEWPORTS)) {
 
     test(`Staff Queue — ${name}`, async ({ page }) => {
       await loginAs(page, STAFF_EMAIL, STAFF_PASSWORD);
-      // LAB 4: every role now lands on /dashboard after login, not /queue —
-      // navigate there explicitly instead of waiting for an auto-redirect
-      // that no longer happens.
-      await page.waitForURL("**/dashboard");
-      await page.goto("/queue");
+      await page.waitForURL("**/queue");
       await expect(page.getByText("Loading queue…")).toHaveCount(0);
       await page.screenshot({
         path: `../artifacts/lab-03/screenshots/staff-queue/${name}.png`,
@@ -42,8 +38,7 @@ for (const [name, size] of Object.entries(VIEWPORTS)) {
 
     test(`Staff Ticket Detail — ${name}`, async ({ page }) => {
       await loginAs(page, STAFF_EMAIL, STAFF_PASSWORD);
-      await page.waitForURL("**/dashboard");
-      await page.goto("/queue");
+      await page.waitForURL("**/queue");
       // Open whichever ticket is first in the queue — same :visible
       // dual-layout pattern as Lab 2's responsive spec.
       await page.locator("tbody tr:visible, .card:visible").first().click();
@@ -57,15 +52,13 @@ for (const [name, size] of Object.entries(VIEWPORTS)) {
 
     test(`Admin User Management — ${name}`, async ({ page }) => {
       await loginAs(page, ADMIN_EMAIL, ADMIN_PASSWORD);
-      // LAB 4: Admin also lands on /dashboard now (previously went straight
-      // to /admin/users).
-      await page.waitForURL("**/dashboard");
-      await page.goto("/admin/users");
+      await page.waitForURL("**/admin/users");
       await expect(page.getByText("Loading users…")).toHaveCount(0);
       await page.screenshot({
         path: `../artifacts/lab-03/screenshots/user-management/list-${name}.png`,
         fullPage: true,
       });
+    
       await page.getByText("+ Create User").click();
       await page.getByText("Create New User").waitFor();
       await page.screenshot({

@@ -1,23 +1,10 @@
 import { test, expect } from "@playwright/test";
-import { loginAs } from "../lab-03/helpers.js";
+import { selectRequester } from "./helpers.js";
 import path from "path";
-
-// Assumes these accounts exist, are active, and mustChangePassword is
-// already false. Lab 2's original "Development Requester" dropdown picker
-// was retired when Lab 3 introduced real login, so these specs now log in
-// as real seeded Requesters instead of selecting one from a dropdown.
-const REQUESTER_A_EMAIL = "jennifer.anderson@example.com";
-const REQUESTER_A_PASSWORD = "Jennifer123!";
-// CONFIRM: this second account's email/password are placeholders — adjust
-// to a real, currently-working second Requester before running E2E-02.
-const REQUESTER_B_EMAIL = "michael.brown@example.com";
-const REQUESTER_B_PASSWORD = "Michael123!";
 
 test.describe("E2E-01 — full ticket creation and discovery flow", () => {
   test("a Requester creates a Ticket and finds it in My Tickets", async ({ page }) => {
-    await loginAs(page, REQUESTER_A_EMAIL, REQUESTER_A_PASSWORD);
-    // Lab 4: every role lands on /dashboard after login (not /tickets).
-    await page.waitForURL("**/dashboard");
+    await selectRequester(page);
 
     await page.getByText("+ Create Ticket").click();
     await page.waitForURL("**/create-ticket");
@@ -40,12 +27,11 @@ test.describe("E2E-01 — full ticket creation and discovery flow", () => {
 
 test.describe("E2E-02 — cross-Requester access is blocked", () => {
   test("Requester B cannot view a Ticket URL belonging to Requester A", async ({ browser }) => {
-    // Two separate browser contexts = two separate cookie jars, i.e. two
-    // genuinely independent logged-in sessions.
+    // Two separate browser contexts simulate two separate Requester sessions,
+    // since our RequesterContext is in-memory per tab/session.
     const contextA = await browser.newContext();
     const pageA = await contextA.newPage();
-    await loginAs(pageA, REQUESTER_A_EMAIL, REQUESTER_A_PASSWORD);
-    await pageA.waitForURL("**/dashboard");
+    await selectRequester(pageA, 1);
 
     await pageA.getByText("+ Create Ticket").click();
     await pageA.waitForURL("**/create-ticket");
@@ -63,17 +49,19 @@ test.describe("E2E-02 — cross-Requester access is blocked", () => {
 
     const contextB = await browser.newContext();
     const pageB = await contextB.newPage();
-    await loginAs(pageB, REQUESTER_B_EMAIL, REQUESTER_B_PASSWORD); // a different Requester than A
-    await pageB.waitForURL("**/dashboard");
+    await selectRequester(pageB, 2); // a different Requester than A
 
-    // Lab 2's original version of this test used pushState/popstate instead
-    // of page.goto(), because the old in-memory RequesterContext (tied to
-    // the retired X-Requester-Id dev picker) was wiped by a full reload.
-    // That reasoning no longer applies: Lab 3's real auth lives in an
-    // httpOnly session cookie, which survives a full navigation, so a plain
-    // goto() is both simpler and more realistic here (a genuine fresh
-    // request that the server's ownership check has to reject).
-    await pageB.goto(new URL(ticketUrl).pathname);
+    // Deliberately NOT using page.goto() here: a full navigation reloads the
+    // SPA and wipes the in-memory RequesterContext (BR-05 has no persistence
+    // across reload), which would trigger the AC-02 "no Requester selected"
+    // redirect instead of the AC-03 ownership check we're actually testing.
+    // Client-side routing (pushState + popstate) preserves Requester B's
+    // session so we genuinely exercise the ownership block.
+    const ticketPath = new URL(ticketUrl).pathname;
+    await pageB.evaluate((path) => {
+      window.history.pushState({}, "", path);
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    }, ticketPath);
 
     await expect(pageB.getByText(/Ticket not found/i)).toBeVisible();
     await expect(pageB.getByText("Requester A private ticket")).not.toBeVisible();
@@ -85,8 +73,7 @@ test.describe("E2E-02 — cross-Requester access is blocked", () => {
 
 test.describe("E2E-03 — attachment upload, soft-remove, blocked download", () => {
   test("a removed attachment can no longer be downloaded", async ({ page }) => {
-    await loginAs(page, REQUESTER_A_EMAIL, REQUESTER_A_PASSWORD);
-    await page.waitForURL("**/dashboard");
+    await selectRequester(page);
 
     await page.getByText("+ Create Ticket").click();
     await page.waitForURL("**/create-ticket");
