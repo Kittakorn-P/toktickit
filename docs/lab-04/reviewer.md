@@ -59,9 +59,9 @@ multi-status drill-down filter support on `tickets.ts`/`staffTickets.ts`,
 
 ## PR 5 — Final Regression & Hardening
 **Branch:** `feature/lab4-final-hardening` → `lab4-staging`
-**PR link:** []
-**Files:** []
-**Comments from [reviewer]:** []
+**PR link:** https://github.com/Kittakorn-P/toktickit/pull/53
+**Files:** Lab 4 E2E specs and screenshots, Lab 2/3 E2E fixes, revised `specification.md`, `api-spec.md`, `tests.md`, `ui-spec.md`, README, `reviewer.md`, `ai-use.md`
+**Comments from [reviewer]:** read through, docs, screenshots and the e2e specs look fine and the readme covers all four labs. one thing to check later: ticket-resolution spec resolves a ticket with no action taken, handout says resolve should need one, so it will break if you add that gate. merging
 
 ---
 
