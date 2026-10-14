@@ -16,13 +16,13 @@ export async function createTestUser(role: "REQUESTER" | "IT_STAFF" | "ADMINISTR
 }
 
 export async function loginTestUser(email: string, password: string = TEST_PASSWORD): Promise<string[]> {
-    const res = await request(app).post("/api/auth/login").send({ email, password });
-    const cookies = res.headers["set-cookie"];
-    if (!cookies) {
-      throw new Error(`Login failed for ${email} — no session cookie returned.`);
-    }
-    return Array.isArray(cookies) ? cookies : [cookies];
+  const res = await request(app).post("/api/auth/login").send({ email, password });
+  const cookies = res.headers["set-cookie"];
+  if (!cookies) {
+    throw new Error(`Login failed for ${email} — no session cookie returned.`);
   }
+  return Array.isArray(cookies) ? cookies : [cookies];
+}
 
 // Deletes a test user and everything referencing them, in FK-safe order.
 export async function cleanupTestUser(userId: number) {
@@ -31,11 +31,17 @@ export async function cleanupTestUser(userId: number) {
   const ticketIds = tickets.map((t) => t.id);
 
   if (ticketIds.length > 0) {
+    // LAB 4 — ActionTaken rows must go before their Ticket, same reason
+    // Attachment/Comment/Note already had to.
+    await prisma.actionTaken.deleteMany({ where: { ticketId: { in: ticketIds } } });
     await prisma.attachment.deleteMany({ where: { ticketId: { in: ticketIds } } });
     await prisma.comment.deleteMany({ where: { ticketId: { in: ticketIds } } });
     await prisma.note.deleteMany({ where: { ticketId: { in: ticketIds } } });
     await prisma.ticket.deleteMany({ where: { id: { in: ticketIds } } });
   }
+  // LAB 4 — a staff test user may be the performer on actions belonging to
+  // tickets requested by someone else, so this isn't covered by the block above.
+  await prisma.actionTaken.deleteMany({ where: { performedById: userId } });
   await prisma.comment.deleteMany({ where: { authorId: userId } });
   await prisma.note.deleteMany({ where: { authorId: userId } });
   await prisma.ticket.updateMany({ where: { ownerId: userId }, data: { ownerId: null } });

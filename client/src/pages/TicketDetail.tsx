@@ -3,7 +3,8 @@ import { useParams, Link } from "react-router-dom";
 import {
   getTicketDetail, getAttachments, uploadAttachment, removeAttachment, downloadAttachment,
   getComments, postComment,
-  TicketDetail as TicketDetailType, AttachmentMeta, CommentItem,
+  getTicketActions, reopenTicket, setLooksResolved,
+  TicketDetail as TicketDetailType, AttachmentMeta, CommentItem, ActionTaken,
 } from "../api.js";
 import { useAuth } from "../context/AuthContext.js";
 
@@ -20,10 +21,12 @@ export default function TicketDetail() {
   const [ticket, setTicket] = useState<TicketDetailType | null>(null);
   const [attachments, setAttachments] = useState<AttachmentMeta[]>([]);
   const [comments, setComments] = useState<CommentItem[]>([]);
+  const [actions, setActions] = useState<ActionTaken[]>([]); // LAB 4
   const [newComment, setNewComment] = useState("");
-  const [resolvedNoted, setResolvedNoted] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [statusActionError, setStatusActionError] = useState(""); // LAB 4
+  const [statusActionBusy, setStatusActionBusy] = useState(false); // LAB 4
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const ticketId = Number(id);
@@ -33,9 +36,14 @@ export default function TicketDetail() {
       const t = await getTicketDetail(ticketId);
       if (!t) return setLoadState("not-found");
       setTicket(t);
-      const [a, c] = await Promise.all([getAttachments(ticketId), getComments(ticketId)]);
+      const [a, c, actionsList] = await Promise.all([
+        getAttachments(ticketId),
+        getComments(ticketId),
+        getTicketActions(ticketId), // LAB 4
+      ]);
       setAttachments(a);
       setComments(c);
+      setActions(actionsList);
       setLoadState("loaded");
     } catch {
       setLoadState("error");
@@ -108,16 +116,35 @@ export default function TicketDetail() {
     }
   }
 
-  // BR-05: this only posts a Public Comment noting the Requester's
-  // observation — it never changes currentStatus. Only IT Staff/Admin can
-  // do that, via the staff-only status endpoint.
-  async function handleMarkResolved() {
+  // LAB 4 (BR-07/FR-07): persisted advisory flag on the Ticket, not a
+  // one-off comment — it survives a reload and is what IT Staff sees on
+  // their side, replacing the Lab 3 "post a special comment" approach.
+  async function handleMarkLooksResolved() {
+    if (statusActionBusy) return; // double-click guard
+    setStatusActionBusy(true);
+    setStatusActionError("");
     try {
-      await postComment(ticketId, "Requester has indicated this problem appears resolved.");
-      setComments(await getComments(ticketId));
-      setResolvedNoted(true);
+      await setLooksResolved(ticketId, true);
+      await loadAll();
     } catch {
-      setUploadError("Unable to submit. Please try again.");
+      setStatusActionError("Unable to submit. Please try again.");
+    } finally {
+      setStatusActionBusy(false);
+    }
+  }
+
+  // LAB 4 (BR-06): the only status transition a Requester can ever trigger.
+  async function handleReopen() {
+    if (statusActionBusy) return;
+    setStatusActionBusy(true);
+    setStatusActionError("");
+    try {
+      await reopenTicket(ticketId);
+      await loadAll();
+    } catch (err) {
+      setStatusActionError(err instanceof Error ? err.message : "Unable to reopen ticket.");
+    } finally {
+      setStatusActionBusy(false);
     }
   }
 
@@ -164,11 +191,55 @@ export default function TicketDetail() {
       <div className="mb-3"><label className="form-label">Description</label>
         <p className="border rounded p-2 bg-white" style={{ whiteSpace: "pre-wrap" }}>{ticket.description}</p></div>
 
-      <div className="mb-4">
-        <button className="btn btn-outline-success" disabled={resolvedNoted} onClick={handleMarkResolved}>
-          {resolvedNoted ? "✓ Marked as appears resolved" : "Mark Problem as Resolved"}
+      {statusActionError && <div className="alert alert-danger py-2">{statusActionError}</div>}
+
+      {/* LAB 4: Looks Resolved is now its own advisory control, separate
+          from the status control that only IT Staff/Admin can operate. */}
+      <div className="mb-4 d-flex gap-2 flex-wrap">
+        <button
+          className="btn btn-outline-success"
+          disabled={statusActionBusy || ticket.looksResolvedByRequester}
+          onClick={handleMarkLooksResolved}
+        >
+          {ticket.looksResolvedByRequester ? "✓ Marked as appears resolved" : "Mark Problem as Resolved"}
         </button>
-        {resolvedNoted && <p className="text-muted small mt-1">Thanks — IT Staff will confirm final resolution.</p>}
+        {ticket.currentStatus === "RESOLVED" && (
+          <button className="btn btn-outline-warning" disabled={statusActionBusy} onClick={handleReopen}>
+            Reopen Ticket
+          </button>
+        )}
+      </div>
+      {ticket.looksResolvedByRequester && (
+        <p className="text-muted small mt-n3 mb-4">Thanks — IT Staff will confirm final resolution.</p>
+      )}
+
+      {/* LAB 4 — Actions Taken (read-only for Requesters, FR-05) */}
+      <div className="card mb-4">
+        <div className="card-header"><strong>Actions Taken ({actions.length})</strong></div>
+        <div className="card-body">
+          {actions.length === 0 && <p className="text-muted">No actions recorded yet.</p>}
+          {actions.map((a) => (
+            <div key={a.id} className="border-bottom py-2">
+              <div className="d-flex justify-content-between align-items-start">
+                <strong>{new Date(a.actionDateTime).toLocaleString()}</strong>
+                {a.followUpRequired ? (
+                  <span className="badge bg-warning text-dark">⚠ Follow-up needed</span>
+                ) : (
+                  <span className="badge bg-secondary">✓ No follow-up</span>
+                )}
+              </div>
+              <p className="mb-1"><strong>Description:</strong> {a.description}</p>
+              <p className="mb-1"><strong>Result:</strong> {a.result}</p>
+              {a.followUpRequired && a.followUpNote && (
+                <p className="mb-1"><strong>Follow-up note:</strong> {a.followUpNote}</p>
+              )}
+              {a.attachmentNotes && (
+                <p className="mb-1 text-muted"><strong>Attachment notes:</strong> {a.attachmentNotes}</p>
+              )}
+              <small className="text-muted">Performed by {a.performedBy.name}</small>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="card mb-4">

@@ -11,6 +11,7 @@ import StaffQueue from "./pages/StaffQueue.js";
 import StaffTicketDetail from "./pages/StaffTicketDetail.js";
 import HealthCheck from "./pages/HealthCheck.js";
 import Home from "./pages/Home.js";
+import Dashboard from "./pages/Dashboard.js";
 import AdminUsers from "./pages/AdminUsers.js";
 
 export default function App() {
@@ -25,6 +26,9 @@ export default function App() {
             <Route path="/change-password" element={<ChangePassword />} />
             <Route element={<AppShell />}>
               <Route path="/" element={<Home />} />
+              {/* LAB 4: one route for every authenticated role — Dashboard
+                  itself decides Requester vs Staff/Admin content. */}
+              <Route path="/dashboard" element={<Dashboard />} />
             </Route>
           </Route>
 

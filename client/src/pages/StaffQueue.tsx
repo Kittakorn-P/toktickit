@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { getStaffQueue, StaffTicketListItem, PaginationMeta } from "../api.js";
 import { useAuth } from "../context/AuthContext.js";
 
@@ -15,31 +15,55 @@ export default function StaffQueue() {
   const { user } = useAuth();
   const navigate = useNavigate();
 
+  // LAB 4: filters (including owner, new in this sprint) can arrive via the
+  // URL from a Dashboard drill-down link (e.g. /queue?owner=10 for "My
+  // Assigned", or /queue?status=NEW).
+  const [searchParams] = useSearchParams();
+
   const [tickets, setTickets] = useState<StaffTicketListItem[]>([]);
   const [pagination, setPagination] = useState<PaginationMeta | null>(null);
   const [loadState, setLoadState] = useState<LoadState>("loading");
-  const [search, setSearch] = useState("");
-  const [itPriority, setItPriority] = useState("");
-  const [status, setStatus] = useState("");
-  const [sort, setSort] = useState("-createdAt");
+  const [search, setSearch] = useState(searchParams.get("search") ?? "");
+  const [itPriority, setItPriority] = useState(searchParams.get("itPriority") ?? "");
+  const [status, setStatus] = useState(searchParams.get("status") ?? "");
+  const [owner, setOwner] = useState(searchParams.get("owner") ?? "");
+  const [sort, setSort] = useState(searchParams.get("sort") ?? "-createdAt");
   const [page, setPage] = useState(1);
 
   useEffect(() => {
+    setSearch(searchParams.get("search") ?? "");
+    setItPriority(searchParams.get("itPriority") ?? "");
+    setStatus(searchParams.get("status") ?? "");
+    setOwner(searchParams.get("owner") ?? "");
+    setSort(searchParams.get("sort") ?? "-createdAt");
+    setPage(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  useEffect(() => {
     setLoadState("loading");
-    getStaffQueue({ search: search || undefined, itPriority: itPriority || undefined, status: status || undefined, sort, page })
+    getStaffQueue({
+      search: search || undefined,
+      itPriority: itPriority || undefined,
+      status: status || undefined,
+      owner: owner || undefined,
+      sort,
+      page,
+    })
       .then((res) => {
         setTickets(res.tickets);
         setPagination(res.pagination);
         setLoadState("loaded");
       })
       .catch(() => setLoadState("error"));
-  }, [search, itPriority, status, sort, page]);
+  }, [search, itPriority, status, owner, sort, page]);
 
   function clearFilters() {
-    setSearch(""); setItPriority(""); setStatus(""); setSort("-createdAt"); setPage(1);
+    setSearch(""); setItPriority(""); setStatus(""); setOwner(""); setSort("-createdAt"); setPage(1);
   }
 
-  const hasActiveFilters = search || itPriority || status;
+  const isMyAssignedView = owner === String(user?.id);
+  const hasActiveFilters = search || itPriority || status || owner;
   const isTrulyEmpty = loadState === "loaded" && tickets.length === 0 && !hasActiveFilters;
   const isNoResults = loadState === "loaded" && tickets.length === 0 && !!hasActiveFilters;
 
@@ -47,10 +71,17 @@ export default function StaffQueue() {
     <div className="container py-4">
       <div className="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
         <div>
-          <h1 className="h4 mb-1">My Queue</h1>
+          <h1 className="h4 mb-1">{isMyAssignedView ? "My Assigned Tickets" : "My Queue"}</h1>
           <p className="text-muted small mb-0">Signed in as <strong>{user?.name}</strong></p>
         </div>
       </div>
+
+      {hasActiveFilters && (
+        <div className="alert alert-light border d-flex justify-content-between align-items-center py-2">
+          <span className="small text-muted">Filtered view</span>
+          <button className="btn btn-link btn-sm p-0" onClick={clearFilters}>Clear Filters</button>
+        </div>
+      )}
 
       <div className="row g-2 mb-3">
         <div className="col-md-4">
